@@ -1,0 +1,361 @@
+:root {
+  /* Adobe Photoshop Exact Color Palette */
+  --ps-panel-bg: #323232;
+  --ps-panel-bg-darker: #2d2d2d;
+  --ps-canvas-bg: #1e1e1e;
+  --ps-border: #444444; 
+  --ps-border-dark: #222222;
+  --ps-text: #b8b8b8;
+  --ps-text-bright: #e4e4e4;
+  --ps-btn-bg: #404040;
+  --ps-btn-border: #262626;
+  --ps-btn-hover: #4e4e4e;
+  --ps-accent: #2e6ff7; /* Photoshop selection blue */
+  --ps-menubar-bg: #2d2d2d;
+  --ps-icon: #aaaaaa;
+  --ps-icon-active: #ffffff;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--ps-panel-bg);
+  color: var(--ps-text);
+  font-family: "Segoe UI", "San Francisco", "Helvetica Neue", sans-serif;
+  font-size: 11px;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* Custom Scrollbar for Panels */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--ps-panel-bg); border-left: 1px solid var(--ps-border); }
+::-webkit-scrollbar-thumb { background: #555555; border: 2px solid var(--ps-panel-bg); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: #7a7a7a; }
+
+/* Global Utilities */
+.flex { display: flex; }
+.flex-col { display: flex; flex-direction: column; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.w-full { width: 100%; }
+
+/* --- APP STRUCTURE --- */
+.ps-app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* Top Menubar */
+.ps-menubar {
+  height: 24px;
+  background-color: var(--ps-menubar-bg);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-bottom: 1px solid #1a1a1a;
+  gap: 15px;
+}
+.ps-menubar-item {
+  cursor: pointer;
+  padding: 2px 6px;
+  line-height: normal;
+}
+.ps-menubar-item:hover { background-color: #4a4a4a; color: var(--ps-text-bright); border-radius: 2px; }
+
+/* Options Bar (Sub menu) */
+.ps-options-bar {
+  height: 30px;
+  background-color: var(--ps-panel-bg);
+  border-bottom: 1px solid #111;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 16px;
+  box-shadow: 0 1px 0 #4d4d4d inset;
+}
+
+/* Main Workspace Row */
+.ps-main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Vertical Toolbar */
+.ps-toolbar {
+  width: 32px;
+  background-color: var(--ps-panel-bg-darker);
+  border-right: 1px solid #111;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 5px;
+  gap: 2px;
+}
+.ps-toolbar-btn {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 2px;
+  color: var(--ps-icon);
+}
+.ps-toolbar-btn:hover { background-color: #444; color: var(--ps-text-bright); }
+.ps-toolbar-btn.active { background-color: #1a1a1a; color: var(--ps-text-bright); box-shadow: inset 1px 1px 3px rgba(0,0,0,0.5); }
+
+/* Canvas Area */
+.ps-canvas-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: #2b2b2b;
+}
+
+/* Document Tab */
+.ps-doc-tabs {
+  height: 26px;
+  display: flex;
+  background-color: #2b2b2b;
+  border-bottom: 1px solid #1a1a1a;
+}
+.ps-doc-tab {
+  height: 100%;
+  background-color: #3b3b3b;
+  padding: 0 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--ps-text-bright);
+  border-right: 1px solid #222;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  margin-left: 2px;
+  margin-top: 2px;
+  box-shadow: inset 0 1px 0 #555;
+}
+
+/* Actual Canvas Viewport */
+.ps-canvas-area {
+  flex: 1;
+  background-color: var(--ps-canvas-bg);
+  background-image: 
+    linear-gradient(45deg, #1c1c1c 25%, transparent 25%, transparent 75%, #1c1c1c 75%, #1c1c1c),
+    linear-gradient(45deg, #1c1c1c 25%, transparent 25%, transparent 75%, #1c1c1c 75%, #1c1c1c);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
+}
+
+.ps-canvas {
+  position: absolute;
+  box-shadow: 0 2px 15px rgba(0,0,0,0.6);
+  border: 1px solid #000;
+}
+
+/* Status Bar */
+.ps-status-bar {
+  height: 22px;
+  background-color: var(--ps-panel-bg);
+  border-top: 1px solid #222;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 15px;
+  color: var(--ps-text);
+  font-size: 10px;
+}
+
+/* Right Panels */
+.ps-right-panels {
+  width: 280px;
+  background-color: var(--ps-panel-bg);
+  border-left: 1px solid #222;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Panel Sections (like Properties, Layers, Adjustments) */
+.ps-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  border-bottom: 2px solid #222;
+}
+
+/* Panel Tabs */
+.ps-panel-tabs {
+  height: 26px;
+  display: flex;
+  background-color: #2a2a2a;
+}
+.ps-panel-tab {
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  color: #888;
+  cursor: pointer;
+  border-right: 1px solid #222;
+}
+.ps-panel-tab.active {
+  background-color: var(--ps-panel-bg);
+  color: var(--ps-text-bright);
+  font-weight: 600;
+  border-top: 2px solid transparent;
+  border-bottom: none;
+}
+
+/* Panel Content Area */
+.ps-panel-content {
+  padding: 12px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Common UI Elements */
+.ps-section-header {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ps-text-bright);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  margin-top: 10px;
+}
+.ps-section-header.first { margin-top: 0; }
+.ps-section-header::before {
+  content: '▼';
+  font-size: 8px;
+  color: #777;
+}
+
+/* Gray Buttons inside Panels */
+.ps-btn-gray {
+  background-color: var(--ps-btn-bg);
+  color: var(--ps-text-bright);
+  border: 1px solid var(--ps-btn-border);
+  border-top-color: #555;
+  border-radius: 3px;
+  padding: 6px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.ps-btn-gray:hover:not(:disabled) { background-color: var(--ps-btn-hover); border-top-color: #666; }
+.ps-btn-gray:active:not(:disabled) { background-color: #333; border-top-color: #222; }
+.ps-btn-gray:disabled { opacity: 0.5; cursor: default; }
+
+.ps-btn-blue {
+  background-color: var(--ps-accent);
+  color: #fff;
+  border: 1px solid #0050cd;
+  border-top-color: #5ea1ff;
+}
+.ps-btn-blue:hover:not(:disabled) { background-color: #3b7afc; border-top-color: #79aeff; }
+
+/* Sliders */
+.ps-slider-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.ps-slider {
+  -webkit-appearance: none;
+  flex: 1;
+  height: 3px;
+  background: var(--ps-border);
+  outline: none;
+}
+.ps-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 15px;
+  background: #aaa;
+  cursor: pointer;
+  clip-path: polygon(0 0, 100% 0, 100% 70%, 50% 100%, 0 70%); /* Pointy bottom like Photoshop */
+}
+
+/* Numeric Inputs */
+.ps-input {
+  background-color: #222;
+  border: 1px solid #1a1a1a;
+  border-bottom: 1px solid #333;
+  color: var(--ps-text-bright);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 3px 6px;
+  width: 35px;
+  text-align: right;
+  border-radius: 2px;
+}
+.ps-input:focus { outline: 1px solid var(--ps-accent); }
+
+/* Layers Row */
+.layer-row {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 2px;
+  margin-bottom: 2px;
+  cursor: default;
+}
+.layer-row.active {
+  background-color: #4a4a4a;
+}
+.layer-thumb {
+  width: 24px;
+  height: 24px;
+  background: white;
+  margin: 0 10px;
+  border: 1px solid #222;
+  object-fit: cover;
+}
+
+/* Export Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: #4a4a4a;
+  border: 1px solid #222;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+  display: flex;
+  flex-direction: column;
+  width: 900px;
+  height: 600px;
+}
+.modal-header {
+  height: 30px;
+  background-color: #3b3b3b;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  color: #fff;
+  border-bottom: 1px solid #222;
+}
+.modal-body {
+  display: flex;
+  flex: 1;
+  background-color: #3b3b3b;
+}
