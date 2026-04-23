@@ -89,48 +89,85 @@ export default function ExportModal({ activeImage, activeBgColor, queue, onClose
         for (let i = 0; i < counts.st; i++) stItems.push(item);
     });
 
-    // Strategy for 6 PP + 3 ST on 6x4 paper:
-    // 3 columns of PP, 2 rows = 6 PP
-    // Remaining space on right for ST
+    let currentPpIndex = 0;
+    let currentStIndex = 0;
 
-    const pp_cols = 3;
-    const pp_rows = Math.ceil(ppItems.length / pp_cols);
-    
-    // Total width of the combined block (PP columns + gap + ST column)
-    const total_block_w = (pp_cols * PP_W) + ((pp_cols - (stItems.length > 0 ? 0 : 1)) * gap) + (stItems.length > 0 ? ST_W : 0);
-    const total_block_h = Math.max(pp_rows * PP_H + (pp_rows - 1) * gap, stItems.length * ST_H + (stItems.length - 1) * gap);
+    const pp_grid_cols = 3;
+    const pp_grid_rows = 2; // Fixed 2 rows for passport area
+    const max_pp_area_slots = pp_grid_cols * pp_grid_rows;
 
-    // Dynamic starting positions to center everything
-    const start_x = Math.floor((W - total_block_w) / 2);
-    const start_y = Math.floor((H - total_block_h) / 2);
+    // --- Phase 1: Fill the main 3x2 area (passport slots) ---
+    // This will contain a mix of PP and ST photos
+    for (let row = 0; row < pp_grid_rows; row++) {
+        for (let col = 0; col < pp_grid_cols; col++) {
+            // Base position for a passport slot, relative to top-left of the layout area
+            const slot_x = col * (PP_W + gap);
+            const slot_y = row * (PP_H + gap);
 
-    // Calculate PP positions
-    ppItems.forEach((item, i) => {
-        const col = i % pp_cols;
-        const row = Math.floor(i / pp_cols);
-        const x = start_x + col * (PP_W + gap);
-        const y = start_y + row * (PP_H + gap);
+            if (currentPpIndex < ppItems.length) {
+                // Place a passport photo
+                placements.push({ x: slot_x, y: slot_y, w: PP_W, h: PP_H, type: "pp", asset: ppItems[currentPpIndex] });
+                currentPpIndex++;
+            } else if (currentStIndex < stItems.length) {
+                // Place a stamp photo in the empty passport slot, centered within it
+                const x_centered = slot_x + (PP_W - ST_W) / 2;
+                const y_centered = slot_y + (PP_H - ST_H) / 2;
+                placements.push({ x: x_centered, y: y_centered, w: ST_W, h: ST_H, type: "st", asset: stItems[currentStIndex] });
+                currentStIndex++;
+            }
+        }
+    }
+
+    // --- Phase 2: Place any remaining stamp photos in a dedicated right column ---
+    // Calculate the starting X for this right column.
+    // It should be after the main 3x2 area, plus a gap.
+    let right_col_base_x = (pp_grid_cols * (PP_W + gap)); // This is relative to the start of the layout area
+    let right_col_current_y = 0; // Relative to the start of the layout area
+
+    while (currentStIndex < stItems.length) {
+        const x = right_col_base_x;
+        const y = right_col_current_y;
+
+        placements.push({ x: x, y: y, w: ST_W, h: ST_H, type: "st", asset: stItems[currentStIndex] });
+        right_col_current_y += (ST_H + gap);
+        currentStIndex++;
+    }
+
+    // --- Phase 3: Adjust for overall centering and margin ---
+    if (placements.length === 0) {
+        setStatus("No photos selected.");
+        setFitsAll(true);
+        return [];
+    }
+
+    // Find the min/max coordinates to determine the effective content size
+    const minX = Math.min(...placements.map(p => p.x));
+    const minY = Math.min(...placements.map(p => p.y));
+    const maxX = Math.max(...placements.map(p => p.x + p.w));
+    const maxY = Math.max(...placements.map(p => p.y + p.h));
+
+    const contentWidth = maxX - minX;
+    const contentHeight = maxY - minY;
+
+    // Calculate offsets to center the entire content block within the DNP_W x DNP_H area, also accounting for initial margins
+    const offsetX = (W - contentWidth) / 2 - minX;
+    const offsetY = (H - contentHeight) / 2 - minY;
+
+    const finalPlacements = placements.map(p => {
+        const final_x = p.x + offsetX;
+        const final_y = p.y + offsetY;
         
-        if (x + PP_W > W || y + PP_H > H) isFit = false;
-        
-        placements.push({ x, y, w: PP_W, h: PP_H, type: "pp", asset: item });
-    });
-
-    // Calculate ST positions (starting after the last PP column)
-    const st_x_start = start_x + pp_cols * (PP_W + gap);
-    stItems.forEach((item, i) => {
-        const x = st_x_start;
-        const y = start_y + i * (ST_H + gap);
-
-        if (x + ST_W > W || y + ST_H > H) isFit = false;
-
-        placements.push({ x, y, w: ST_W, h: ST_H, type: "st", asset: item });
+        // Check if individual item fits within the DNP sheet after centering
+        if (final_x < mx || final_x + p.w > W - mx || final_y < my || final_y + p.h > H - my) { // Check against margins
+            isFit = false;
+        }
+        return { ...p, x: final_x, y: final_y };
     });
 
     setFitsAll(isFit);
-    const total = ppItems.length + stItems.length;
-    setStatus(isFit ? `Ready: ${total} photos arranged.` : "Warning: Overflows 6x4 paper size.");
-    return placements;
+    const totalPlaced = currentPpIndex + (currentStIndex); // Total items placed
+    setStatus(isFit ? `Ready: ${totalPlaced} photos arranged.` : "Warning: Overflows 6x4 paper size.");
+    return finalPlacements;
   };
 
   const drawLayout = () => {

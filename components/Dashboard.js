@@ -151,28 +151,7 @@ export default function Dashboard() {
   if (activeApp === "studio") {
     return (
       <div style={{ position: 'relative', width: '100%', height: '100vh' }}>
-        <button 
-          onClick={() => setActiveApp("dashboard")}
-          style={{
-            position: 'absolute',
-            top: 10,
-            left: 10,
-            zIndex: 1000,
-            backgroundColor: '#333',
-            color: '#fff',
-            border: '1px solid #444',
-            padding: '5px 12px',
-            borderRadius: '4px',
-            fontSize: '12px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
-        >
-          <Browsers size={14} /> Back to Dashboard
-        </button>
-        <PhotoStudio />
+        <PhotoStudio onBackToDashboard={() => setActiveApp("dashboard")} />
       </div>
     );
   }

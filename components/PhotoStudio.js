@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { 
   ArrowsOutCardinal, Crop as CropIcon, PaintBrush, MagnifyingGlass, Sparkle, 
-  ArrowUUpLeft, ArrowUUpRight, DownloadSimple, Printer, ImageSquare, Palette, Eye, LockKey, Desktop, Eraser
+  ArrowUUpLeft, ArrowUUpRight, DownloadSimple, Printer, ImageSquare, Palette, Eye, LockKey, Desktop, Eraser, Browsers
 } from "@phosphor-icons/react";
 import ExportModal from "./ExportModal";
 import { removeBackground } from "@imgly/background-removal";
@@ -13,7 +13,7 @@ const TEMPLATES = {
   stamp: { w: 236, h: 295, label: "Stamp", ratio: 236/295 }
 };
 
-export default function PhotoStudio() {
+export default function PhotoStudio({ onBackToDashboard }) {
   const [activeTool, setActiveTool] = useState("move");
   const [image, setImage] = useState(null);
   const [imageName, setImageName] = useState("Untitled-1");
@@ -1185,6 +1185,27 @@ export default function PhotoStudio() {
     <div className="ps-app">
       {/* Top Menubar */}
       <div className="ps-menubar">
+        <button
+          onClick={onBackToDashboard}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--ps-text-bright)',
+            fontSize: '12px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            padding: '2px 8px',
+            borderRadius: '3px',
+            transition: 'background-color 0.2s ease',
+            marginRight: '10px'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#4a4a4a'}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
+          <Browsers size={14} /> Dashboard
+        </button>
         <span style={{fontWeight: 700, color: '#2e6ff7'}}>Ps</span>
         <div className="ps-menubar-item" onClick={handleOpenClick} style={{fontWeight: 600}}>File</div>
         <div className="ps-menubar-item" style={{display:'flex', gap:10}}>
