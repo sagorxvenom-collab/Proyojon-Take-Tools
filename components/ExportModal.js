@@ -1,16 +1,24 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 
+// DNP 6x4" sheet @ 300 DPI = 1800x1200px
+// Passport 1.5x1.8" @ 300dpi = 450x540px (Standard BD Studio Size)
+// Stamp    0.8x1.0" @ 300dpi = 240x300px
+const DNP_W = 1800, DNP_H = 1200;
+const PP_W = 450,   PP_H = 540; 
+const ST_W = 240,   ST_H = 300;
+const FR_W = 1800,  FR_H = 1200; 
+
 export default function ExportModal({ activeImage, activeBgColor, queue, onClose }) {
   // itemCounts: { [assetId]: { pp: number, st: number } }
   const [itemCounts, setItemCounts] = useState(() => {
     const initial = {};
     queue.forEach(item => {
-      initial[item.id] = { pp: 0, st: 0 };
+      initial[item.id] = { pp: 0, st: 0, fr: 0 };
     });
     // Add current active image if not in queue
     if (activeImage && !queue.find(a => a.img === activeImage)) {
-        initial['active'] = { pp: 4, st: 0 }; 
+        initial['active'] = { pp: 4, st: 0, fr: 0 }; 
     }
     return initial;
   });
@@ -29,7 +37,7 @@ export default function ExportModal({ activeImage, activeBgColor, queue, onClose
     drawLayout();
   }, [itemCounts]);
 
-  const resizeImage = (sourceImg, targetW, targetH, bgColor) => {
+  const resizeImage = (sourceImg, targetW, targetH, bgColor, forceRotate = false) => {
     const canvas = document.createElement("canvas");
     canvas.width = targetW;
     canvas.height = targetH;
@@ -45,31 +53,55 @@ export default function ExportModal({ activeImage, activeBgColor, queue, onClose
         ctx.fillRect(0, 0, targetW, targetH);
     }
     
-    const sRatio = sourceImg.width / sourceImg.height;
-    const tRatio = targetW / targetH;
-    
-    let w = sourceImg.width;
-    let h = sourceImg.height;
-    let sx = 0, sy = 0;
-    
-    if (tRatio > sRatio) {
-      h = w / tRatio;
-      sy = (sourceImg.height - h) / 2;
+    // Auto-Rotate: If source is portrait and target is landscape (or forced)
+    const isSourcePortrait = sourceImg.height > sourceImg.width;
+    const isTargetLandscape = targetW > targetH;
+
+    // Detect 4R aspect ratio (1.5 or 0.66) to trigger auto-rotation
+    const is4RRatio = Math.abs((targetW / targetH) - (DNP_W / DNP_H)) < 0.01;
+
+    if (forceRotate || (isSourcePortrait && isTargetLandscape && is4RRatio)) {
+        ctx.save();
+        ctx.translate(targetW / 2, targetH / 2);
+        ctx.rotate(Math.PI / 2);
+        
+        const sRatio = sourceImg.width / sourceImg.height;
+        const tRatio = targetH / targetW; // Swapped aspect ratio for rotated space
+        
+        let w = sourceImg.width;
+        let h = sourceImg.height;
+        let sx = 0, sy = 0;
+        
+        if (tRatio > sRatio) {
+          h = w / tRatio;
+          sy = (sourceImg.height - h) / 2;
+        } else {
+          w = h * tRatio;
+          sx = (sourceImg.width - w) / 2;
+        }
+        // In rotated space, we draw the image with swapped width/height
+        ctx.drawImage(sourceImg, sx, sy, w, h, -targetH / 2, -targetW / 2, targetH, targetW);
+        ctx.restore();
     } else {
-      w = h * tRatio;
-      sx = (sourceImg.width - w) / 2;
+        const sRatio = sourceImg.width / sourceImg.height;
+        const tRatio = targetW / targetH;
+        
+        let w = sourceImg.width;
+        let h = sourceImg.height;
+        let sx = 0, sy = 0;
+        
+        if (tRatio > sRatio) {
+          h = w / tRatio;
+          sy = (sourceImg.height - h) / 2;
+        } else {
+          w = h * tRatio;
+          sx = (sourceImg.width - w) / 2;
+        }
+        ctx.drawImage(sourceImg, sx, sy, w, h, 0, 0, targetW, targetH);
     }
-    
-    ctx.drawImage(sourceImg, sx, sy, w, h, 0, 0, targetW, targetH);
     return canvas;
   };
 
-  // DNP 6x4" sheet @ 300 DPI = 1800x1200px
-  // Passport 1.5x1.8" @ 300dpi = 450x540px (Standard BD Studio Size)
-  // Stamp    0.8x1.0" @ 300dpi = 240x300px
-  const DNP_W = 1800, DNP_H = 1200;
-  const PP_W = 450,   PP_H = 540; 
-  const ST_W = 240,   ST_H = 300;
 
   const calculateLayout = () => {
     const W = DNP_W, H = DNP_H;
@@ -80,92 +112,104 @@ export default function ExportModal({ activeImage, activeBgColor, queue, onClose
     let isFit = true;
 
     // Collect all requested photos
+    const frItems = [];
     const ppItems = [];
     const stItems = [];
 
     allItems.forEach(item => {
-        const counts = itemCounts[item.id] || { pp: 0, st: 0 };
-        for (let i = 0; i < counts.pp; i++) ppItems.push(item);
-        for (let i = 0; i < counts.st; i++) stItems.push(item);
+        const counts = itemCounts[item.id] || { pp: 0, st: 0, fr: 0 };
+        for (let i = 0; i < (counts.fr || 0); i++) frItems.push(item);
+        for (let i = 0; i < (counts.pp || 0); i++) ppItems.push(item);
+        for (let i = 0; i < (counts.st || 0); i++) stItems.push(item);
     });
 
+    let currentFrIndex = 0;
     let currentPpIndex = 0;
     let currentStIndex = 0;
 
-    const pp_grid_cols = 3;
-    const pp_grid_rows = 2; // Fixed 2 rows for passport area
-    const max_pp_area_slots = pp_grid_cols * pp_grid_rows;
+    // --- Phase 0: 4R Full Sheet ---
+    if (frItems.length > 0) {
+        placements.push({ x: 0, y: 0, w: DNP_W, h: DNP_H, type: "fr", asset: frItems[0] });
+        currentFrIndex++;
+        if (frItems.length > 1 || ppItems.length > 0 || stItems.length > 0) isFit = false;
+    } else {
+        // --- Phase 1: PP Area ---
+        const pp_grid_cols = 3;
+        const pp_grid_rows = 2; 
 
-    // --- Phase 1: Fill the main 3x2 area (passport slots) ---
-    // This will contain a mix of PP and ST photos
-    for (let row = 0; row < pp_grid_rows; row++) {
-        for (let col = 0; col < pp_grid_cols; col++) {
-            // Base position for a passport slot, relative to top-left of the layout area
-            const slot_x = col * (PP_W + gap);
-            const slot_y = row * (PP_H + gap);
+        for (let row = 0; row < pp_grid_rows; row++) {
+            for (let col = 0; col < pp_grid_cols; col++) {
+                const slot_x = col * (PP_W + gap);
+                const slot_y = row * (PP_H + gap);
 
-            if (currentPpIndex < ppItems.length) {
-                // Place a passport photo
-                placements.push({ x: slot_x, y: slot_y, w: PP_W, h: PP_H, type: "pp", asset: ppItems[currentPpIndex] });
-                currentPpIndex++;
-            } else if (currentStIndex < stItems.length) {
-                // Place a stamp photo in the empty passport slot, centered within it
-                const x_centered = slot_x + (PP_W - ST_W) / 2;
-                const y_centered = slot_y + (PP_H - ST_H) / 2;
-                placements.push({ x: x_centered, y: y_centered, w: ST_W, h: ST_H, type: "st", asset: stItems[currentStIndex] });
-                currentStIndex++;
+                if (currentPpIndex < ppItems.length) {
+                    placements.push({ x: slot_x, y: slot_y, w: PP_W, h: PP_H, type: "pp", asset: ppItems[currentPpIndex] });
+                    currentPpIndex++;
+                } else if (currentStIndex < stItems.length) {
+                    // Fill remaining PP slots with rotated ST stamps (2 per slot)
+                    const st_land_w = ST_H; // 300
+                    const st_land_h = ST_W; // 240
+                    const st_gap = gap; 
+                    const total_h = st_land_h * 2 + st_gap; 
+                    
+                    const start_x = slot_x + (PP_W - st_land_w) / 2;
+                    const start_y = slot_y + (PP_H - total_h) / 2;
+
+                    // First stamp in slot
+                    placements.push({ x: start_x, y: start_y, w: st_land_w, h: st_land_h, type: "st", asset: stItems[currentStIndex], rotate: true });
+                    currentStIndex++;
+
+                    // Second stamp in same slot (if available)
+                    if (currentStIndex < stItems.length) {
+                        placements.push({ x: start_x, y: start_y + st_land_h + st_gap, w: st_land_w, h: st_land_h, type: "st", asset: stItems[currentStIndex], rotate: true });
+                        currentStIndex++;
+                    }
+                }
             }
+        }
+
+        // --- Phase 2: ST Column ---
+        let right_col_base_x = (pp_grid_cols * (PP_W + gap)); 
+        let right_col_current_y = 0; 
+
+        while (currentStIndex < stItems.length) {
+            placements.push({ x: right_col_base_x, y: right_col_current_y, w: ST_W, h: ST_H, type: "st", asset: stItems[currentStIndex] });
+            right_col_current_y += (ST_H + gap);
+            currentStIndex++;
         }
     }
 
-    // --- Phase 2: Place any remaining stamp photos in a dedicated right column ---
-    // Calculate the starting X for this right column.
-    // It should be after the main 3x2 area, plus a gap.
-    let right_col_base_x = (pp_grid_cols * (PP_W + gap)); // This is relative to the start of the layout area
-    let right_col_current_y = 0; // Relative to the start of the layout area
-
-    while (currentStIndex < stItems.length) {
-        const x = right_col_base_x;
-        const y = right_col_current_y;
-
-        placements.push({ x: x, y: y, w: ST_W, h: ST_H, type: "st", asset: stItems[currentStIndex] });
-        right_col_current_y += (ST_H + gap);
-        currentStIndex++;
-    }
-
-    // --- Phase 3: Adjust for overall centering and margin ---
     if (placements.length === 0) {
         setStatus("No photos selected.");
         setFitsAll(true);
         return [];
     }
 
-    // Find the min/max coordinates to determine the effective content size
+    // Centering
+    if (placements[0].type === "fr") {
+        setFitsAll(isFit);
+        setStatus(isFit ? "Ready: 4R Full Sheet Layout." : "Warning: Overlap! One 4R per sheet only.");
+        return placements;
+    }
+
     const minX = Math.min(...placements.map(p => p.x));
     const minY = Math.min(...placements.map(p => p.y));
     const maxX = Math.max(...placements.map(p => p.x + p.w));
     const maxY = Math.max(...placements.map(p => p.y + p.h));
-
     const contentWidth = maxX - minX;
     const contentHeight = maxY - minY;
-
-    // Calculate offsets to center the entire content block within the DNP_W x DNP_H area, also accounting for initial margins
     const offsetX = (W - contentWidth) / 2 - minX;
     const offsetY = (H - contentHeight) / 2 - minY;
 
     const finalPlacements = placements.map(p => {
         const final_x = p.x + offsetX;
         const final_y = p.y + offsetY;
-        
-        // Check if individual item fits within the DNP sheet after centering
-        if (final_x < mx || final_x + p.w > W - mx || final_y < my || final_y + p.h > H - my) { // Check against margins
-            isFit = false;
-        }
+        if (final_x < mx || final_x + p.w > W - mx || final_y < my || final_y + p.h > H - my) isFit = false;
         return { ...p, x: final_x, y: final_y };
     });
 
     setFitsAll(isFit);
-    const totalPlaced = currentPpIndex + (currentStIndex); // Total items placed
+    const totalPlaced = currentPpIndex + currentStIndex + currentFrIndex;
     setStatus(isFit ? `Ready: ${totalPlaced} photos arranged.` : "Warning: Overflows 6x4 paper size.");
     return finalPlacements;
   };
@@ -175,102 +219,69 @@ export default function ExportModal({ activeImage, activeBgColor, queue, onClose
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    // Scale factor: preview canvas width vs actual DNP width
     const S = canvas.width / DNP_W;
-
     const placements = calculateLayout();
-    
-    // Draw background
     ctx.fillStyle = "white";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Asset caching (use small preview-sized cells for performance)
     const cache = {};
-
     placements.forEach(p => {
-        const key = `${p.asset.id}_${p.type}`;
+        const key = `${p.asset.id}_${p.type}_${p.rotate ? 'r' : 'n'}`;
         if (!cache[key]) {
-            // Preview at scaled-down size for speed
             const previewW = Math.round(p.w * S);
             const previewH = Math.round(p.h * S);
-            const raw = resizeImage(p.asset.img, previewW, previewH, p.asset.bgColor);
-            
-            // Sync border logic with export (scaled down)
-            // Export uses 3px for PP, 2px for ST. At 0.35 scale, that's ~1px.
-            const borderPX = p.type === 'pp' ? 1 : 1;
-            
+            const raw = resizeImage(p.asset.img, previewW, previewH, p.asset.bgColor, p.rotate);
+            const borderPX = p.type === 'fr' ? 0 : 1;
             const wrap = document.createElement("canvas");
             wrap.width = previewW; wrap.height = previewH;
             const wCtx = wrap.getContext("2d");
-            wCtx.imageSmoothingEnabled = true;
-            wCtx.imageSmoothingQuality = "high";
-            
-            wCtx.fillStyle = "white"; 
-            wCtx.fillRect(0, 0, previewW, previewH);
-            
+            wCtx.fillStyle = "white"; wCtx.fillRect(0, 0, previewW, previewH);
             wCtx.drawImage(raw, borderPX, borderPX, previewW - 2*borderPX, previewH - 2*borderPX);
-            
-            // Use same subtle stroke as export for accuracy
-            wCtx.strokeStyle = "rgba(180,180,180,0.8)"; 
-            wCtx.lineWidth = 0.5; 
-            wCtx.strokeRect(0, 0, previewW, previewH);
-            
+            if (p.type !== 'fr') {
+                wCtx.strokeStyle = "rgba(180,180,180,0.8)"; wCtx.lineWidth = 0.5; wCtx.strokeRect(0, 0, previewW, previewH);
+            }
             cache[key] = wrap;
         }
         ctx.drawImage(cache[key], Math.round(p.x * S), Math.round(p.y * S));
     });
 
-    // Subtler cut-guide lines or remove if confusing, but keeping them very light
-    ctx.setLineDash([2, 4]); 
-    ctx.strokeStyle = "rgba(0,0,0,0.08)"; 
-    ctx.lineWidth = 0.5;
-    const xs = new Set(); const ys = new Set();
-    placements.forEach(p => { 
-        xs.add(Math.round(p.x*S)); 
-        xs.add(Math.round((p.x+p.w)*S)); 
-        ys.add(Math.round(p.y*S)); 
-        ys.add(Math.round((p.y+p.h)*S)); 
-    });
-    xs.forEach(x => { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); });
-    ys.forEach(y => { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); });
-    ctx.setLineDash([]);
+    if (placements.length > 0 && placements[0].type !== 'fr') {
+        ctx.setLineDash([2, 4]); ctx.strokeStyle = "rgba(0,0,0,0.08)"; ctx.lineWidth = 0.5;
+        const xs = new Set(); const ys = new Set();
+        placements.forEach(p => { xs.add(Math.round(p.x*S)); xs.add(Math.round((p.x+p.w)*S)); ys.add(Math.round(p.y*S)); ys.add(Math.round((p.y+p.h)*S)); });
+        xs.forEach(x => { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); });
+        ys.forEach(y => { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); });
+        ctx.setLineDash([]);
+    }
   };
 
   const doExport = () => {
     const canvas = document.createElement("canvas");
     canvas.width = DNP_W; canvas.height = DNP_H;
     const ctx = canvas.getContext("2d");
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
     ctx.fillStyle = "white"; ctx.fillRect(0, 0, DNP_W, DNP_H);
-
     const placements = calculateLayout();
     const cache = {};
-
     placements.forEach(p => {
-        const key = `${p.asset.id}_${p.type}`;
+        const key = `${p.asset.id}_${p.type}_${p.rotate ? 'r' : 'n'}`;
         if (!cache[key]) {
-            // Draw the photo at full cell resolution for HD output
-            const raw = resizeImage(p.asset.img, p.w, p.h, p.asset.bgColor);
-            // Thin white border (3px for passport, 2px for stamp) — cut guide
-            const borderPX = p.type === 'pp' ? 3 : 2;
+            const raw = resizeImage(p.asset.img, p.w, p.h, p.asset.bgColor, p.rotate);
+            const borderPX = p.type === 'fr' ? 0 : (p.type === 'pp' ? 3 : 2);
             const wrap = document.createElement("canvas");
             wrap.width = p.w; wrap.height = p.h;
             const wCtx = wrap.getContext("2d");
-            wCtx.imageSmoothingEnabled = true;
-            wCtx.imageSmoothingQuality = "high";
             wCtx.fillStyle = "white"; wCtx.fillRect(0, 0, p.w, p.h);
             wCtx.drawImage(raw, borderPX, borderPX, p.w - 2*borderPX, p.h - 2*borderPX);
-            // Subtle cut-guide line
-            wCtx.strokeStyle = "rgba(200,200,200,0.8)"; wCtx.lineWidth = 0.5; wCtx.strokeRect(0, 0, p.w, p.h);
+            if (p.type !== 'fr') {
+                wCtx.strokeStyle = "rgba(200,200,200,0.8)"; wCtx.lineWidth = 0.5; wCtx.strokeRect(0, 0, p.w, p.h);
+            }
             cache[key] = wrap;
         }
         ctx.drawImage(cache[key], p.x, p.y);
     });
-
-    // Export as lossless PNG (1800x1200 @ 300dpi, no quality loss)
     const link = document.createElement("a");
-    link.download = `DNP_Studio_${Date.now()}.png`;
+    link.download = `DNP-SAGOR STUDIO -MOB 01734771154- ${Date.now()}.png`;
     link.href = canvas.toDataURL("image/png");
     link.click();
     onClose();
@@ -280,7 +291,7 @@ export default function ExportModal({ activeImage, activeBgColor, queue, onClose
     <div className="modal-overlay">
       <div className="modal-content" style={{width: '95%', maxWidth: '1100px'}}>
         <div className="modal-header">
-           <span>DNP Multi-Person Layout Builder (6x4 inch)</span>
+           <span>DNP Professional Layout Builder (6x4 inch)</span>
            <span onClick={onClose} style={{cursor:'pointer'}}>✕</span>
         </div>
         
@@ -297,6 +308,13 @@ export default function ExportModal({ activeImage, activeBgColor, queue, onClose
                         
                         <div style={{display: 'flex', flexDirection: 'column', gap: 5}}>
                             <div className="flex justify-between items-center text-[10px] text-gray-400">
+                                <span>4R Full (6x4)</span> <span>{itemCounts[item.id]?.fr || 0}</span>
+                            </div>
+                            <input type="range" min="0" max="1" value={itemCounts[item.id]?.fr || 0} 
+                                onChange={e => setItemCounts(prev => ({...prev, [item.id]: {...prev[item.id], fr: parseInt(e.target.value)}}))} 
+                                style={{width: '100%'}} />
+
+                            <div className="flex justify-between items-center text-[10px] text-gray-400 mt-2">
                                 <span>Passport</span> <span>{itemCounts[item.id]?.pp || 0}</span>
                             </div>
                             <input type="range" min="0" max="12" value={itemCounts[item.id]?.pp || 0} 
@@ -319,7 +337,7 @@ export default function ExportModal({ activeImage, activeBgColor, queue, onClose
 
                 <div style={{marginTop: '20px', display: 'flex', gap: 10}}>
                    <button className="ps-btn-gray" style={{flex: 1}} onClick={onClose}>Cancel</button>
-                   <button className="ps-btn-gray ps-btn-blue" style={{flex: 1}} disabled={!fitsAll || Object.values(itemCounts).every(v => v.pp===0 && v.st===0)} onClick={doExport}>Export MIX</button>
+                   <button className="ps-btn-gray ps-btn-blue" style={{flex: 1}} disabled={!fitsAll || Object.values(itemCounts).every(v => v.pp===0 && v.st===0 && v.fr===0)} onClick={doExport}>Export DNP</button>
                 </div>
             </div>
 

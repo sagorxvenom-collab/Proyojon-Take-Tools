@@ -2,15 +2,18 @@
 import React, { useState, useEffect, useRef } from "react";
 import { 
   ArrowsOutCardinal, Crop as CropIcon, PaintBrush, MagnifyingGlass, Sparkle, 
-  ArrowUUpLeft, ArrowUUpRight, DownloadSimple, Printer, ImageSquare, Palette, Eye, LockKey, Desktop, Eraser, Browsers
+  ArrowUUpLeft, ArrowUUpRight, DownloadSimple, Printer, ImageSquare, Palette, Eye, LockKey, Desktop, Eraser, Browsers, Gear, Layout
 } from "@phosphor-icons/react";
 import ExportModal from "./ExportModal";
+import UniversalExportModal from "./UniversalExportModal";
 import { removeBackground } from "@imgly/background-removal";
 
 // Sizes in logical pixels representing standard printing dimensions at 300dpi
 const TEMPLATES = {
   passport: { w: 472, h: 591, label: "Passport", ratio: 472/591 },
-  stamp: { w: 236, h: 295, label: "Stamp", ratio: 236/295 }
+  stamp: { w: 236, h: 295, label: "Stamp", ratio: 236/295 },
+  four_r_p: { w: 1200, h: 1800, label: "4R Portrait", ratio: 1200/1800 },
+  four_r_l: { w: 1800, h: 1200, label: "4R Landscape", ratio: 1800/1200 }
 };
 
 export default function PhotoStudio({ onBackToDashboard }) {
@@ -64,6 +67,10 @@ export default function PhotoStudio({ onBackToDashboard }) {
   const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showUniversalModal, setShowUniversalModal] = useState(false);
+  const [initialPaper, setInitialPaper] = useState('dnp');
+  const [a4Copies, setA4Copies] = useState(20);
+  const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(false);
 
   // Panel Tabs
   const [activeUpperTab, setActiveUpperTab] = useState("Properties");
@@ -71,6 +78,8 @@ export default function PhotoStudio({ onBackToDashboard }) {
   const [selectedAssetIds, setSelectedAssetIds] = useState([]);
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [mergeSettings, setMergeSettings] = useState({ orientation: 'vertical', swap: false });
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
+  const [theme, setTheme] = useState("dark"); // dark, light, purple
 
   useEffect(() => {
     const handleResize = () => {
@@ -789,11 +798,44 @@ export default function PhotoStudio({ onBackToDashboard }) {
     }
   };
 
+  const STUDIO_NAME = "SAGOR STUDIO -MOB 01734771154-";
+
+  const handleExportJPG = () => {
+    if (!image) return;
+    const finalImg = commitFilters();
+    const canvas = document.createElement("canvas");
+    canvas.width = finalImg.width;
+    canvas.height = finalImg.height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(finalImg, 0, 0);
+    const link = document.createElement("a");
+    link.download = `${STUDIO_NAME} ${Date.now()}.jpg`;
+    link.href = canvas.toDataURL("image/jpeg", 0.9);
+    link.click();
+    setShowExportDropdown(false);
+  };
+
+  const handleExportPDF = () => {
+    if (!image) return;
+    const finalImg = commitFilters();
+    import('jspdf').then(({ jsPDF }) => {
+      const orientation = finalImg.width > finalImg.height ? 'l' : 'p';
+      const pdf = new jsPDF({
+        orientation: orientation,
+        unit: 'px',
+        format: [finalImg.width, finalImg.height]
+      });
+      pdf.addImage(finalImg.src, 'PNG', 0, 0, finalImg.width, finalImg.height);
+      pdf.save(`${STUDIO_NAME} ${Date.now()}.pdf`);
+      setShowExportDropdown(false);
+    });
+  };
+
   const handleExportSingle = () => {
     if (!image) return;
     const finalImg = commitFilters();
     const link = document.createElement("a");
-    link.download = `Studio_${Date.now()}.png`;
+    link.download = `${STUDIO_NAME} ${Date.now()}.png`;
     link.href = finalImg.src;
     link.click();
   };
@@ -815,8 +857,11 @@ export default function PhotoStudio({ onBackToDashboard }) {
         const cols = Math.floor((A4_W - 2*margin + spacing) / (pw + spacing));
         const rows = Math.floor((A4_H - 2*margin + spacing) / (ph + spacing));
 
+        let count = 0;
         for(let r=0; r<rows; r++){
             for(let c=0; c<cols; c++){
+                if (count >= a4Copies) break;
+
                 const x = margin + c*(pw + spacing);
                 const y = margin + r*(ph + spacing);
                 // Draw white background for passport
@@ -827,7 +872,9 @@ export default function PhotoStudio({ onBackToDashboard }) {
                 ctx.drawImage(baked, 0, 0, baked.width, baked.height, x, y, pw, ph);
                 // Cut line
                 ctx.strokeStyle = "#eee"; ctx.lineWidth = 1; ctx.strokeRect(x,y,pw,ph);
+                count++;
             }
+            if (count >= a4Copies) break;
         }
         
         const link = document.createElement("a");
@@ -931,15 +978,96 @@ export default function PhotoStudio({ onBackToDashboard }) {
     mergedImg.src = canvas.toDataURL("image/png");
   };
 
+  const [creditsUsed, setCreditsUsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return parseInt(localStorage.getItem('removebg_credits_used') || '0');
+    }
+    return 0;
+  });
+
+  const [customAPIKeys, setCustomAPIKeys] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('custom_removebg_keys');
+      return saved ? saved.split(',').filter(k => k.trim()) : [
+        "6eEUNJLrnTcykAgaZNGWtWEL",
+        "XT7LwC8Hn9ojSw5wCbonNFyw",
+        "DGoeQrJ6yNFrUesGo47KtYvM"
+      ];
+    }
+    return [];
+  });
+  const [showSettings, setShowSettings] = useState(false);
+
   const handleRemoveBackground = async () => {
     if(!image) return alert("Please open an image first.");
+    saveState();
+    setStatus("Removing Background (AI API)...");
+
+    const baked = commitFilters();
+    // Convert base64 to Blob for more reliable API upload
+    const fetchRes = await fetch(baked.src);
+    const imageBlob = await fetchRes.blob();
+
+    let success = false;
+    const keysToTry = customAPIKeys.length > 0 ? customAPIKeys : [
+        "6eEUNJLrnTcykAgaZNGWtWEL",
+        "XT7LwC8Hn9ojSw5wCbonNFyw",
+        "DGoeQrJ6yNFrUesGo47KtYvM"
+    ];
+
+    for (let i = 0; i < keysToTry.length; i++) {
+        const key = keysToTry[i].trim();
+        if (!key) continue;
+        try {
+            const formData = new FormData();
+            formData.append('image_file', imageBlob, 'image.png');
+            formData.append('size', 'preview'); // Use 'preview' for free credits
+
+            const response = await fetch('https://api.remove.bg/v1.0/removebg', {
+                method: 'POST',
+                headers: { 'X-Api-Key': key },
+                body: formData
+            });
+
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const newImg = new Image();
+                newImg.onload = () => {
+                    setImage(newImg);
+                    setCreditsUsed(prev => {
+                        const next = prev + 1;
+                        localStorage.setItem('removebg_credits_used', next);
+                        return next;
+                    });
+                    setStatus("Ready: Background Removed (API Preview)");
+                };
+                newImg.src = url;
+                success = true;
+                break;
+            } else {
+                const errData = await response.json().catch(() => ({}));
+                console.warn(`API Key ${i+1} failed:`, response.status, errData);
+            }
+        } catch (e) {
+            console.error("Error with remove.bg API:", e);
+        }
+    }
+
+    if (!success) {
+        setStatus("API failed, using Local AI...");
+        await handleRemoveBackgroundLocal();
+    }
+  };
+
+  const handleRemoveBackgroundLocal = async () => {
     try {
-      setStatus("Removing Background... Please wait.");
+      setStatus("Removing Background (Local AI)...");
       
       let blob;
       try {
         blob = await removeBackground(image.src, {
-          model: 'isnet', // Highest fidelity model available
+          model: 'isnet', 
           debug: false,
           proxyToWorker: true,
           output: { quality: 1.0, format: 'image/png' },
@@ -957,28 +1085,25 @@ export default function PhotoStudio({ onBackToDashboard }) {
       const url = URL.createObjectURL(blob);
       const newImg = new Image();
       newImg.onload = async () => {
-         // Auto-apply edge decontamination
          try {
              setStatus("Refining Edges...");
              const refinedDataUrl = await internalDecontaminateEdges(newImg);
              const refinedImg = new Image();
              refinedImg.onload = () => {
-                saveState();
                 setImage(refinedImg);
-                setStatus("Ready");
-             }
+                setStatus("Ready: Background Removed (Local)");
+             };
              refinedImg.src = refinedDataUrl;
-         } catch(e) {
-             saveState();
+         } catch (e) {
              setImage(newImg);
-             setStatus("Ready");
+             setStatus("Ready: Background Removed (Local)");
          }
       };
       newImg.src = url;
-    } catch (error) {
-      console.error("BG Removal Error:", error);
-      setStatus("Failed to remove background.");
-      alert("Error removing background. Check console.");
+    } catch (e) {
+      console.error(e);
+      setStatus("Background removal failed.");
+      alert("Failed to remove background.");
     }
   };
 
@@ -1182,9 +1307,9 @@ export default function PhotoStudio({ onBackToDashboard }) {
 
 
   return (
-    <div className="ps-app">
+    <div className={`ps-app theme-${theme} ${isMobilePanelOpen ? 'mobile-panel-active' : ''}`}>
       {/* Top Menubar */}
-      <div className="ps-menubar">
+      <div className="ps-nav ps-menubar">
         <button
           onClick={onBackToDashboard}
           style={{
@@ -1218,6 +1343,53 @@ export default function PhotoStudio({ onBackToDashboard }) {
         <div className="ps-menubar-item" onClick={() => alert('Text typing is not supported in Passport mode.')}>Type</div>
         <div className="ps-menubar-item" onClick={() => alert('Advanced selections require PS Pro.')}>Select</div>
         <div className="ps-menubar-item" onClick={() => alert('Filters: Check Adjustments panel.')}>Filter</div>
+        
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px', marginRight: '10px' }}>
+          <button 
+            onClick={() => setShowSettings(true)}
+            style={{ 
+              background: 'transparent', 
+              border: 'none',
+              color: 'var(--ps-icon)', 
+              padding: '2px 5px', 
+              borderRadius: '3px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              transition: 'color 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = 'var(--ps-text-bright)'}
+            onMouseLeave={(e) => e.currentTarget.style.color = 'var(--ps-icon)'}
+            title="API Settings"
+          >
+            <Gear size={16} />
+          </button>
+          <span style={{ color: '#444', margin: '0 2px' }}>|</span>
+          <span style={{ fontSize: '9px', color: 'var(--ps-text)', opacity: 0.7 }}>APPEARANCE</span>
+          <div style={{ display: 'flex', background: '#1a1a1a', padding: '2px', borderRadius: '4px', border: '1px solid #444' }}>
+            <button 
+              onClick={() => setTheme('dark')}
+              style={{ 
+                padding: '2px 8px', fontSize: '9px', cursor: 'pointer', border: 'none', borderRadius: '3px',
+                background: theme === 'dark' ? '#444' : 'transparent', color: theme === 'dark' ? '#fff' : '#888'
+              }}
+            >DARK</button>
+            <button 
+              onClick={() => setTheme('light')}
+              style={{ 
+                padding: '2px 8px', fontSize: '9px', cursor: 'pointer', border: 'none', borderRadius: '3px',
+                background: theme === 'light' ? '#fff' : 'transparent', color: theme === 'light' ? '#000' : '#888'
+              }}
+            >LIGHT</button>
+            <button 
+              onClick={() => setTheme('purple')}
+              style={{ 
+                padding: '2px 8px', fontSize: '9px', cursor: 'pointer', border: 'none', borderRadius: '3px',
+                background: theme === 'purple' ? '#a855f7' : 'transparent', color: theme === 'purple' ? '#fff' : '#888'
+              }}
+            >PURPLE</button>
+          </div>
+        </div>
       </div>
 
       {/* Options Bar */}
@@ -1230,10 +1402,14 @@ export default function PhotoStudio({ onBackToDashboard }) {
               onChange={(e) => {
                 if(e.target.value === "pp") setTemplateCrop(TEMPLATES.passport);
                 if(e.target.value === "st") setTemplateCrop(TEMPLATES.stamp);
+                if(e.target.value === "4rp") setTemplateCrop(TEMPLATES.four_r_p);
+                if(e.target.value === "4rl") setTemplateCrop(TEMPLATES.four_r_l);
               }}>
                 <option value="">Original</option>
                 <option value="pp">Passport (40x50mm)</option>
                 <option value="st">Stamp (20x25mm)</option>
+                <option value="4rp">4R (4x6) Portrait</option>
+                <option value="4rl">4R (6x4) Landscape</option>
             </select>
             {cropBox && activeTool === "crop" && (
                 <>
@@ -1250,12 +1426,72 @@ export default function PhotoStudio({ onBackToDashboard }) {
                <ArrowUUpRight size={12}/>
             </button>
             <span style={{color: '#444', margin: '0 5px'}}>|</span>
-            <button className="ps-btn-gray" onClick={handleExportSingle} disabled={!image} title="Save current image directly">
+            <div style={{ position: 'relative' }}>
+              <button 
+                className="ps-btn-gray" 
+                onClick={() => setShowExportDropdown(!showExportDropdown)} 
+                disabled={!image} 
+                title="Save current image directly"
+                style={{ borderColor: showExportDropdown ? 'var(--ps-accent)' : undefined }}
+              >
                 <DownloadSimple size={12}/> Export
-            </button>
-            <button className="ps-btn-gray" onClick={exportA4} disabled={!image} title="Generate A4 Sheet for Home Printers">
-                A4 Sheet
-            </button>
+              </button>
+              {showExportDropdown && (
+                <div style={{
+                  position: 'absolute', top: '100%', right: 0, marginTop: 5,
+                  background: '#1e1e1e', border: '1px solid #444', borderRadius: 6,
+                  boxShadow: '0 10px 30px rgba(0,0,0,0.5)', zIndex: 100, minWidth: 140,
+                  overflow: 'hidden', padding: '4px'
+                }}>
+                  <div 
+                    className="ps-menubar-item" 
+                    style={{ padding: '8px 12px', fontSize: 11, cursor: 'pointer', borderRadius: 4 }}
+                    onClick={handleExportJPG}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2e6ff7'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    Export as JPG
+                  </div>
+                  <div 
+                    className="ps-menubar-item" 
+                    style={{ padding: '8px 12px', fontSize: 11, cursor: 'pointer', borderRadius: 4 }}
+                    onClick={handleExportPDF}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2e6ff7'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    Export as PDF
+                  </div>
+                  <div 
+                    className="ps-menubar-item" 
+                    style={{ padding: '8px 12px', fontSize: 11, cursor: 'pointer', borderRadius: 4, borderTop: '1px solid #333', marginTop: 4 }}
+                    onClick={() => { handleExportSingle(); setShowExportDropdown(false); }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2e6ff7'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    Export as PNG (Original)
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-1" style={{background: '#1a1a1a', padding: '2px 8px', borderRadius: 4, border: '1px solid #333'}}>
+                <span style={{fontSize: 9, color: '#888', fontWeight: 600}}>COPIES:</span>
+                <input 
+                  type="number" 
+                  value={a4Copies} 
+                  onChange={(e) => setA4Copies(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
+                  className="ps-input" 
+                  style={{width: 35, height: 20, fontSize: 11, textAlign: 'center', background: 'transparent', border: 'none'}} 
+                />
+                <button 
+                  className="ps-btn-gray" 
+                  onClick={() => { setInitialPaper('a4'); setShowUniversalModal(true); }} 
+                  disabled={!image} 
+                  title="Universal Print Layout (A4, 5R, Custom)"
+                  style={{border: 'none', background: 'transparent', color: 'var(--ps-text-bright)', padding: '0 5px'}}
+                >
+                    Universal Print
+                </button>
+            </div>
             <button className="ps-btn-gray ps-btn-blue" onClick={() => setShowExportModal(true)}>
                 <Printer size={12}/> {printQueue.length > 1 ? `Print Layout (${printQueue.length} Images)` : 'Print DNP Layout'}
             </button>
@@ -1265,12 +1501,30 @@ export default function PhotoStudio({ onBackToDashboard }) {
       <div className="ps-main">
         {/* Left Toolbar */}
         <div className="ps-toolbar">
-          <div className={`ps-toolbar-btn ${activeTool === "move" ? "active" : ""}`} onClick={() => setActiveTool("move")}><ArrowsOutCardinal size={16} /></div>
-          <div className={`ps-toolbar-btn ${activeTool === "crop" ? "active" : ""}`} onClick={() => { setActiveTool("crop"); if(!cropBox) setTemplateCrop(TEMPLATES.passport); }}><CropIcon size={16} /></div>
-           <div className={`ps-toolbar-btn ${activeTool === "brush" ? "active" : ""}`} onClick={() => setActiveTool("brush")} title="Brush Tool (B)"><PaintBrush size={16} /></div>
-           <div className={`ps-toolbar-btn ${activeTool === "retouch" ? "active" : ""}`} onClick={() => setActiveTool("retouch")} title="Smooth/Retouch Brush (S)"><Sparkle size={16} /></div>
-           <div className={`ps-toolbar-btn ${activeTool === "eraser" ? "active" : ""}`} onClick={() => setActiveTool("eraser")} title="Eraser Tool (E)"><Eraser size={16} /></div>
-          <div className={`ps-toolbar-btn ${activeTool === "zoom" ? "active" : ""}`} onClick={() => setActiveTool("zoom")}><MagnifyingGlass size={16} /></div>
+          <div className={`ps-toolbar-btn ${activeTool === "move" ? "active" : ""}`} onClick={() => setActiveTool("move")}>
+            <ArrowsOutCardinal size={18} />
+            <span>Move</span>
+          </div>
+          <div className={`ps-toolbar-btn ${activeTool === "crop" ? "active" : ""}`} onClick={() => { setActiveTool("crop"); if(!cropBox) setTemplateCrop(TEMPLATES.passport); }}>
+            <CropIcon size={18} />
+            <span>Crop</span>
+          </div>
+           <div className={`ps-toolbar-btn ${activeTool === "brush" ? "active" : ""}`} onClick={() => setActiveTool("brush")} title="Brush Tool (B)">
+             <PaintBrush size={18} />
+             <span>Brush</span>
+           </div>
+           <div className={`ps-toolbar-btn ${activeTool === "retouch" ? "active" : ""}`} onClick={() => setActiveTool("retouch")} title="Smooth/Retouch Brush (S)">
+             <Sparkle size={18} />
+             <span>Retouch</span>
+           </div>
+           <div className={`ps-toolbar-btn ${activeTool === "eraser" ? "active" : ""}`} onClick={() => setActiveTool("eraser")} title="Eraser Tool (E)">
+             <Eraser size={18} />
+             <span>Eraser</span>
+           </div>
+          <div className={`ps-toolbar-btn ${activeTool === "zoom" ? "active" : ""}`} onClick={() => setActiveTool("zoom")}>
+            <MagnifyingGlass size={18} />
+            <span>Zoom</span>
+          </div>
         </div>
 
         {/* Canvas Area */}
@@ -1650,7 +1904,7 @@ export default function PhotoStudio({ onBackToDashboard }) {
         </div>
 
         {/* Right Panels */}
-        <div className="ps-right-panels">
+        <div className={`ps-right-panel ps-right-panels ${isMobilePanelOpen ? 'mobile-open' : ''}`}>
             {/* Upper Panel Group */}
             <div className="ps-panel">
                 <div className="ps-panel-tabs">
@@ -1763,9 +2017,14 @@ export default function PhotoStudio({ onBackToDashboard }) {
                           <button className="ps-btn-gray ps-btn-blue" onClick={handleEnhance} disabled={status !== "Ready"}>
                               <Sparkle size={12} /> Photo Enhancer
                           </button>
-                          <button className="ps-btn-gray" onClick={handleRemoveBackground} disabled={status.includes("Removing")}>
-                              {status.includes("Removing") ? "Processing..." : "Remove Background"}
-                          </button>
+                          <div className="flex flex-col gap-1">
+                            <button className="ps-btn-gray" onClick={handleRemoveBackground} disabled={status.includes("Removing")}>
+                                {status.includes("Removing") ? "Processing..." : "Remove Background"}
+                            </button>
+                            <div style={{ fontSize: 9, color: '#888', textAlign: 'right', paddingRight: 5, marginTop: -2 }}>
+                                AI Credits Used: <span style={{ color: 'var(--ps-accent)', fontWeight: 700 }}>{creditsUsed}</span> / 150
+                            </div>
+                          </div>
                           <button
                             className="ps-btn-gray"
                             style={{
@@ -1945,13 +2204,23 @@ export default function PhotoStudio({ onBackToDashboard }) {
 
       <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={handleOpen} />
 
-      {showExportModal && (image || printQueue.length > 0) && (
-         <ExportModal 
-           activeImage={image} 
-           activeBgColor={bgColor} 
-           queue={printQueue} 
-           onClose={() => setShowExportModal(false)} 
-         />
+      {showExportModal && (
+        <ExportModal 
+          activeImage={image} 
+          activeBgColor={bgColor}
+          queue={printQueue}
+          onClose={() => setShowExportModal(false)} 
+        />
+      )}
+
+      {showUniversalModal && (
+        <UniversalExportModal 
+          activeImage={image} 
+          activeBgColor={bgColor}
+          queue={printQueue}
+          initialPaperId={initialPaper}
+          onClose={() => setShowUniversalModal(false)} 
+        />
       )}
 
       {showMergeModal && (
@@ -1997,6 +2266,65 @@ export default function PhotoStudio({ onBackToDashboard }) {
                </div>
             </div>
          </div>
+      )}
+
+      {/* Mobile Toggle Button (Photoshop Style) */}
+      <button 
+        className={`mobile-panel-toggle ${isMobilePanelOpen ? 'active' : ''}`} 
+        onClick={() => setIsMobilePanelOpen(!isMobilePanelOpen)}
+        title={isMobilePanelOpen ? "Close Panels" : "Show Properties/Layers"}
+      >
+        <Layout size={24} />
+      </button>
+
+      {showSettings && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '500px', height: 'auto', borderRadius: '8px', overflow: 'hidden' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Gear size={16} />
+                <span>API & System Settings</span>
+              </div>
+              <span onClick={() => setShowSettings(false)} style={{ cursor: 'pointer' }}>✕</span>
+            </div>
+            <div className="modal-body" style={{ padding: '20px', flexDirection: 'column', background: 'var(--ps-panel-bg)' }}>
+              <div className="ps-section-header first">Remove.bg API Keys</div>
+              <p style={{ color: '#888', fontSize: '11px', marginBottom: '10px' }}>
+                Enter your API keys below (one per line). The system will rotate through them automatically.
+              </p>
+              <textarea 
+                style={{ 
+                  width: '100%', height: '120px', background: '#1a1a1a', border: '1px solid #444', 
+                  color: '#fff', borderRadius: '4px', padding: '10px', fontSize: '12px', fontFamily: 'monospace',
+                  resize: 'none', marginBottom: '20px'
+                }}
+                defaultValue={customAPIKeys.join('\n')}
+                id="api-keys-input"
+              />
+              
+              <div className="flex justify-between items-center" style={{ borderTop: '1px solid #333', paddingTop: '15px' }}>
+                <div style={{ fontSize: '10px', color: '#666' }}>
+                  Total Keys: {customAPIKeys.length}
+                </div>
+                <div className="flex gap-2">
+                  <button className="ps-btn-gray" onClick={() => setShowSettings(false)}>Cancel</button>
+                  <button 
+                    className="ps-btn-gray ps-btn-blue" 
+                    onClick={() => {
+                      const input = document.getElementById('api-keys-input').value;
+                      const keys = input.split('\n').map(k => k.trim()).filter(k => k);
+                      if (keys.length === 0) return alert("Please enter at least one API key.");
+                      setCustomAPIKeys(keys);
+                      localStorage.setItem('custom_removebg_keys', keys.join(','));
+                      setShowSettings(false);
+                      alert("Settings Saved Successfully!");
+                    }}
+                  >Save Settings</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
