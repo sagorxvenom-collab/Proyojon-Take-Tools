@@ -617,6 +617,125 @@ body {
     margin-top: 20px !important;
     padding-top: 15px !important;
   }
+
+  /* Mobile Export Modal */
+  .modal-overlay {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: rgba(0,0,0,0.9) !important;
+    display: flex !important;
+    z-index: 10000 !important;
+  }
+  .modal-content {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    border: none !important;
+    border-radius: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    position: relative !important;
+  }
+  .modal-body {
+    flex-direction: column !important;
+    overflow-y: auto !important;
+    flex: 1 !important;
+    background: #1a1a1a !important;
+  }
+  .modal-body > div:first-child {
+    width: 100% !important;
+    height: 40vh !important;
+    min-height: 40vh !important;
+    border-right: none !important;
+    border-bottom: 1px solid #333 !important;
+    position: sticky !important;
+    top: 0;
+    z-index: 10;
+    background: #000 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow: hidden !important;
+  }
+  .modal-body > div:last-child {
+    width: 100% !important;
+    padding: 20px !important;
+    padding-bottom: 80px !important;
+    overflow-y: visible !important;
+  }
+
+  /* Canvas "Mini View" scaling fix */
+  canvas {
+    max-width: 100% !important;
+    height: auto !important;
+    object-fit: contain !important;
+  }
+
+  /* Universal Builder Refinements */
+  .universal-settings-column {
+    display: flex !important;
+    width: 100% !important;
+    border-right: none !important;
+    border-bottom: 1px solid #333 !important;
+    padding: 15px !important;
+    background: #1a1a1a !important;
+    order: 2 !important; /* Move after preview */
+  }
+  .universal-controls-panel {
+    width: 100% !important;
+    padding: 15px !important;
+    border: none !important;
+    background: #1e1e1e !important;
+    order: 3 !important;
+    padding-bottom: 100px !important;
+  }
+  .universal-preview-panel {
+    width: 100% !important;
+    height: 35vh !important;
+    min-height: 35vh !important;
+    padding: 15px !important;
+    background: #000 !important;
+    position: sticky !important;
+    top: 0;
+    z-index: 100;
+    order: 1 !important; /* Keep preview at top */
+    border-bottom: 1px solid #333 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+  .universal-preview-panel canvas {
+    max-width: 95% !important;
+    max-height: 90% !important;
+    box-shadow: 0 0 30px rgba(255,255,255,0.05) !important;
+  }
+
+  /* Interactive Crop Mobile */
+  .crop-controls-mobile {
+     display: flex !important;
+     position: fixed !important;
+     bottom: 80px !important;
+     left: 50% !important;
+     transform: translateX(-50%) !important;
+     gap: 10px !important;
+     z-index: 1000 !important;
+     background: rgba(0,0,0,0.8) !important;
+     padding: 10px 20px !important;
+     border-radius: 50px !important;
+     backdrop-filter: blur(10px) !important;
+     border: 1px solid #444 !important;
+  }
+  .crop-controls-mobile button {
+     padding: 10px 20px !important;
+     border-radius: 25px !important;
+     font-weight: 700 !important;
+  }
 }
 
 @media (min-width: 769px) {

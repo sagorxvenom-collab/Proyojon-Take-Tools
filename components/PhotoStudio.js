@@ -1411,12 +1411,14 @@ export default function PhotoStudio({ onBackToDashboard }) {
                 <option value="4rp">4R (4x6) Portrait</option>
                 <option value="4rl">4R (6x4) Landscape</option>
             </select>
+            <div className={cropBox && activeTool === "crop" ? "crop-controls-mobile" : ""}>
             {cropBox && activeTool === "crop" && (
                 <>
                   <button className="ps-btn-gray ps-btn-blue" style={{marginLeft: 10}} onClick={applyInteractiveCrop}>✓ Apply</button>
                   <button className="ps-btn-gray" onClick={()=>{setCropBox(null); setActiveTool("move");}}>✖ Cancel (Esc)</button>
                 </>
             )}
+            </div>
         </div>
         <div className="flex items-center gap-2" style={{marginLeft: 'auto'}}>
             <button className="ps-btn-gray" onClick={undo} disabled={!(history.length || strokes.length)} title="Ctrl+Z">

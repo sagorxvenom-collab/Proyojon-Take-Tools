@@ -289,24 +289,33 @@ export default function ExportModal({ activeImage, activeBgColor, queue, onClose
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content" style={{width: '95%', maxWidth: '1100px'}}>
+      <div className="modal-content">
         <div className="modal-header">
            <span>DNP Professional Layout Builder (6x4 inch)</span>
            <span onClick={onClose} style={{cursor:'pointer'}}>✕</span>
         </div>
         
-        <div className="modal-body" style={{height: '600px'}}>
-            <div style={{width: 320, backgroundColor: '#323232', borderRight: '1px solid #222', padding: 15, display: 'flex', flexDirection: 'column', overflowY: 'auto'}}>
+        <div className="modal-body">
+            <div className="universal-preview-panel" style={{flex: 1, backgroundColor: '#2b2b2b', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden'}}>
+                <div style={{position: 'absolute', top: 0, left: 0, right: 0, height: 26, backgroundColor: '#262626', borderBottom: '1px solid #1a1a1a', display: 'flex', alignItems: 'center', paddingLeft: 10}}>
+                    <div style={{fontSize: 10, color: '#888'}}>DNP_MIX_PREVIEW.JPG @ 33.3% (RGB/8*)</div>
+                </div>
+                <div style={{boxShadow: '0 10px 40px rgba(0,0,0,0.6)', border: '1px solid #111', maxWidth: '90%', maxHeight: '90%', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                   <canvas ref={canvasRef} width={630} height={420} style={{background: "white", display: 'block', maxWidth: '100%', height: 'auto'}} />
+                </div>
+            </div>
+
+            <div className="universal-controls-panel" style={{width: 320, backgroundColor: '#323232', padding: 15, display: 'flex', flexDirection: 'column'}}>
                 <div className="ps-section-header first">Configure Quantities</div>
                 
                 {allItems.map(item => (
-                    <div key={item.id} style={{marginBottom: 20, padding: 10, background: '#222', borderRadius: 6, border: '1px solid #444'}}>
+                    <div key={item.id} style={{marginBottom: 20, borderBottom: '1px solid #444', paddingBottom: 15}}>
                         <div style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10}}>
-                            <img src={item.img.src} style={{width: 30, height: 36, objectFit: 'cover', borderRadius: 2}} />
-                            <span style={{fontSize: 11, color: '#eee', fontWeight: 600}}>{item.name}</span>
+                            <img src={item.img.src} style={{width: 40, height: 50, objectFit: 'cover', borderRadius: 4, border: '1px solid #555'}} />
+                            <span style={{fontSize: 12, fontWeight: 600, color: '#eee'}}>{item.name}</span>
                         </div>
                         
-                        <div style={{display: 'flex', flexDirection: 'column', gap: 5}}>
+                        <div className="space-y-3" style={{display: 'flex', flexDirection: 'column', gap: 5}}>
                             <div className="flex justify-between items-center text-[10px] text-gray-400">
                                 <span>4R Full (6x4)</span> <span>{itemCounts[item.id]?.fr || 0}</span>
                             </div>
@@ -335,18 +344,9 @@ export default function ExportModal({ activeImage, activeBgColor, queue, onClose
                    {status}
                 </div>
 
-                <div style={{marginTop: '20px', display: 'flex', gap: 10}}>
+                <div style={{marginTop: '20px', display: 'flex', gap: 10, paddingBottom: 20}}>
                    <button className="ps-btn-gray" style={{flex: 1}} onClick={onClose}>Cancel</button>
                    <button className="ps-btn-gray ps-btn-blue" style={{flex: 1}} disabled={!fitsAll || Object.values(itemCounts).every(v => v.pp===0 && v.st===0 && v.fr===0)} onClick={doExport}>Export DNP</button>
-                </div>
-            </div>
-
-            <div style={{flex: 1, backgroundColor: '#2b2b2b', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative'}}>
-                <div style={{position: 'absolute', top: 0, left: 0, right: 0, height: 26, backgroundColor: '#262626', borderBottom: '1px solid #1a1a1a', display: 'flex', alignItems: 'center', paddingLeft: 10}}>
-                    <div style={{fontSize: 10, color: '#888'}}>DNP_MIX_PREVIEW.JPG @ 33.3% (RGB/8*)</div>
-                </div>
-                <div style={{boxShadow: '0 10px 40px rgba(0,0,0,0.6)', border: '1px solid #111'}}>
-                   <canvas ref={canvasRef} width={630} height={420} style={{background: "white", display: 'block'}} />
                 </div>
             </div>
         </div>

@@ -260,11 +260,11 @@ export default function UniversalExportModal({ activeImage, activeBgColor, queue
   };
 
   return (
-    <div className="modal-overlay" style={{backdropFilter: 'blur(8px)', background: 'rgba(0,0,0,0.85)'}}>
-      <div className="modal-content" style={{width: '98%', maxWidth: '1400px', height: '94vh', borderRadius: 12, overflow: 'hidden', border: '1px solid #444', background: '#1a1a1a'}}>
+    <div className="modal-overlay">
+      <div className="modal-content">
         
         {/* Header */}
-        <div className="modal-header" style={{height: 45, padding: '0 20px', background: '#252525', borderBottom: '1px solid #333'}}>
+        <div className="modal-header">
            <div style={{display:'flex', alignItems:'center', gap: 10}}>
              <Printer size={20} color="#2e6ff7" />
              <span style={{fontWeight: 600, fontSize: 14, color: '#fff'}}>Universal Print Layout Builder</span>
@@ -272,10 +272,10 @@ export default function UniversalExportModal({ activeImage, activeBgColor, queue
            <X size={20} onClick={onClose} style={{cursor:'pointer', color: '#888'}} />
         </div>
         
-        <div className="modal-body" style={{flex: 1, display: 'flex', overflow: 'hidden', background: '#1e1e1e'}}>
+        <div className="modal-body" style={{flex: 1, display: 'flex', background: '#1e1e1e', overflowY: 'auto', flexDirection: 'column'}}>
             
             {/* Left Column: Paper Settings */}
-            <div style={{width: 300, background: '#252525', borderRight: '1px solid #333', padding: 20, display: 'flex', flexDirection: 'column', gap: 20}}>
+            <div className="universal-settings-column" style={{width: 300, background: '#252525', borderRight: '1px solid #333', padding: 20, display: 'flex', flexDirection: 'column', gap: 20}}>
                 <div>
                     <label style={{fontSize: 10, color: '#888', fontWeight: 700, textTransform: 'uppercase', marginBottom: 8, display: 'block'}}>Paper Size Preset</label>
                     <select 
@@ -335,17 +335,17 @@ export default function UniversalExportModal({ activeImage, activeBgColor, queue
             </div>
 
             {/* Middle: Canvas Preview */}
-            <div style={{flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40, position: 'relative', overflow: 'hidden'}}>
-                <div style={{position:'absolute', top: 15, left: 20, color: '#555', fontSize: 10, display:'flex', alignItems:'center', gap: 5}}>
+            <div className="universal-preview-panel" style={{flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40, overflow: 'hidden'}}>
+                <div style={{position: 'absolute', top: 0, left: 0, right: 0, height: 30, background: '#252525', borderBottom: '1px solid #333', display: 'flex', alignItems: 'center', padding: '0 15px', gap: 10, fontSize: 10, color: '#888'}}>
                     <Layout size={14} /> LIVE PRINT PREVIEW (300 DPI)
                 </div>
-                <div style={{boxShadow: '0 30px 90px rgba(0,0,0,0.8)', border: '1px solid #111', background: '#fff'}}>
-                    <canvas ref={canvasRef} style={{display: 'block'}} />
+                <div style={{boxShadow: '0 30px 90px rgba(0,0,0,0.8)', border: '1px solid #111', background: '#fff', maxWidth: '95%', maxHeight: '95%', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                    <canvas ref={canvasRef} style={{display: 'block', maxWidth: '100%', height: 'auto'}} />
                 </div>
             </div>
 
             {/* Right Column: Asset Selection & Quantities */}
-            <div style={{width: 320, background: '#252525', borderLeft: '1px solid #333', padding: 20, display: 'flex', flexDirection: 'column', gap: 15, overflowY: 'auto'}}>
+            <div className="universal-controls-panel" style={{width: 320, background: '#252525', borderLeft: '1px solid #333', padding: 20, display: 'flex', flexDirection: 'column', gap: 15, overflowY: 'auto'}}>
                 <label style={{fontSize: 10, color: '#888', fontWeight: 700, textTransform: 'uppercase'}}>Photo Quantities</label>
                 
                 {allItems.map(item => (
