@@ -1546,12 +1546,12 @@ export default function PhotoStudio({ onBackToDashboard }) {
                style={{position: 'relative', width: '100%', height: '100%', overflow: 'hidden'}}
             >
               {!image && (
-                 <div style={{
+                 <div className="ps-landing-content" style={{
                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                     width: '100%', height: '100%', color: '#999', userSelect: 'none',
                     background: 'radial-gradient(circle, #252525 0%, #161616 100%)', zIndex: 10
                  }}>
-                    <div style={{
+                    <div className="landing-icon-box" style={{
                        padding: '60px', borderRadius: 20, border: '1px solid #333', 
                        display: 'flex', flexDirection: 'column', alignItems: 'center',
                        background: 'rgba(25,25,25,0.6)', backdropFilter: 'blur(15px)',

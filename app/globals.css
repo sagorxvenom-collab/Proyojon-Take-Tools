@@ -425,57 +425,90 @@ body {
     flex-direction: column !important;
   }
 
+  .ps-app {
+    height: 100vh !important;
+    height: 100dvh !important; /* Dynamic viewport height for mobile */
+    overflow: hidden !important;
+    position: relative !important;
+  }
+
+  .ps-main {
+    height: calc(100vh - 120px) !important;
+    overflow: hidden !important;
+  }
+
   .ps-toolbar {
     width: 100% !important;
-    height: 70px !important;
+    height: 65px !important;
     flex-direction: row !important;
     position: fixed !important;
     bottom: 0 !important;
     left: 0 !important;
+    right: 0 !important;
     border-right: none !important;
     border-top: 1px solid #111 !important;
-    padding: 0 10px !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
+    padding: 0 5px !important;
+    overflow: hidden !important; /* Prevent internal scroll of toolbar */
     background: #1a1a1a !important;
-    box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
-    z-index: 200 !important;
-    gap: 15px !important;
+    box-shadow: 0 -5px 25px rgba(0,0,0,0.7);
+    z-index: 9999 !important; /* Ensure it stays above everything */
+    display: flex !important;
     justify-content: space-around;
+    align-items: center;
+  }
+
+  .ps-toolbar::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
   }
 
   .ps-toolbar-btn {
-    width: 60px !important;
-    height: 60px !important;
-    min-width: 60px !important;
-    padding: 5px !important;
+    width: auto !important;
+    min-width: 55px !important;
+    height: 55px !important;
+    padding: 2px !important;
   }
 
   .ps-right-panel {
     position: fixed !important;
-    bottom: 70px !important;
+    bottom: 0 !important;
     left: 0 !important;
     width: 100% !important;
-    height: 40vh !important;
+    height: 45vh !important;
     background: #252525 !important;
     border-left: none !important;
     border-top: 1px solid #333 !important;
     border-radius: 20px 20px 0 0 !important;
-    z-index: 150 !important;
-    transform: translateY(105%);
+    z-index: 250 !important;
+    transform: translateY(110%);
     transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     box-shadow: 0 -10px 40px rgba(0,0,0,0.6);
     overflow-y: auto !important;
+    pointer-events: none; /* Disable interaction when closed */
+    visibility: hidden;
   }
 
   .ps-right-panel.mobile-open {
     transform: translateY(0);
+    pointer-events: auto;
+    visibility: visible;
+    bottom: 65px !important; /* Sit above toolbar */
   }
 
   .ps-canvas-container {
-    height: calc(100vh - 120px) !important;
-    padding: 10px !important;
+    height: calc(100vh - 110px) !important;
+    padding: 0 !important;
     background: #111 !important;
+    overflow: hidden !important;
+  }
+
+  .ps-status-bar {
+    display: none !important;
+  }
+
+  .ps-landing-content {
+    height: 100% !important;
+    padding: 15px !important;
+    justify-content: center !important;
   }
 
   .ps-nav {
@@ -548,6 +581,41 @@ body {
   /* Hide non-essential desktop elements on mobile */
   .ps-nav-menu-item:not(.essential) {
     display: none !important;
+  }
+
+  /* Compact Landing Page for Mobile */
+  .ps-landing-content {
+    padding: 10px !important;
+    justify-content: flex-start !important;
+    padding-top: 30px !important;
+  }
+  .ps-landing-content h1 {
+    font-size: 22px !important;
+    margin-bottom: 5px !important;
+    margin-top: 10px !important;
+  }
+  .ps-landing-content p {
+    font-size: 12px !important;
+    margin-bottom: 15px !important;
+  }
+  .landing-icon-box {
+    padding: 15px !important;
+    margin-bottom: 10px !important;
+    border-radius: 20px !important;
+  }
+  .landing-icon-box svg {
+    width: 32px !important;
+    height: 32px !important;
+  }
+  .ps-landing-content button {
+    padding: 10px 20px !important;
+    font-size: 14px !important;
+    border-radius: 10px !important;
+  }
+  .ps-landing-content div[style*="marginTop: '80px'"],
+  .ps-landing-content div[style*="marginTop: '40px'"] {
+    margin-top: 20px !important;
+    padding-top: 15px !important;
   }
 }
 
