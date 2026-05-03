@@ -2,7 +2,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { 
   ArrowsOutCardinal, Crop as CropIcon, PaintBrush, MagnifyingGlass, Sparkle, 
-  ArrowUUpLeft, ArrowUUpRight, DownloadSimple, Printer, ImageSquare, Palette, Eye, LockKey, Desktop, Eraser, Browsers, Gear, Layout
+  ArrowUUpLeft, ArrowUUpRight, DownloadSimple, Printer, ImageSquare, Eye, LockKey, Eraser, Gear, Layout,
+  MagicWand, Scissors, ArrowsOut, Sun, CircleHalf, Drop, Palette, Hourglass,
+  MagnifyingGlassPlus, MagnifyingGlassMinus, ArrowCounterClockwise, X, FloppyDisk,
+  Browsers, Desktop
 } from "@phosphor-icons/react";
 import ExportModal from "./ExportModal";
 import UniversalExportModal from "./UniversalExportModal";
@@ -24,6 +27,10 @@ export default function PhotoStudio({ onBackToDashboard }) {
   const [redoStack, setRedoStack] = useState([]);
   const [status, setStatus] = useState("Ready");
   const [printQueue, setPrintQueue] = useState([]);
+  const [isMobile, setIsMobile] = useState(false);
+  // Pinch-to-zoom state
+  const pinchStartDistRef = useRef(null);
+  const pinchStartZoomRef = useRef(null);
 
   // Adjustments
   const [brightness, setBrightness] = useState(1.0);
@@ -88,12 +95,13 @@ export default function PhotoStudio({ onBackToDashboard }) {
         canvasRef.current.height = wrapRef.current.clientHeight;
         drawCanvas();
       }
+      setIsMobile(window.innerWidth <= 768);
     };
     handleResize();
     const ro = window.ResizeObserver ? new ResizeObserver(handleResize) : null;
     if (ro && wrapRef.current) ro.observe(wrapRef.current);
-    
-    return () => { if (ro) ro.disconnect(); };
+    window.addEventListener('resize', handleResize);
+    return () => { if (ro) ro.disconnect(); window.removeEventListener('resize', handleResize); };
   }, []);
 
   useEffect(() => {
@@ -436,15 +444,29 @@ export default function PhotoStudio({ onBackToDashboard }) {
       ctx.moveTo(cx + cw - bracketLen, cy + ch); ctx.lineTo(cx + cw, cy + ch); ctx.lineTo(cx + cw, cy + ch - bracketLen);
       ctx.stroke();
 
-      // Drag Handles (minimal)
+      // Drag Handles — মোবাইলে বড়, desktop এ ছোট
+      const canvas2 = canvasRef.current;
+      const isMobileView = canvas2 && canvas2.width <= 768;
+      const handleSize = isMobileView ? 14 : 5;
       ctx.fillStyle = "#fff";
       ctx.strokeStyle = "#000";
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 1.5;
       const handles = getCropHandles(cropBox.x, cropBox.y, cropBox.width, cropBox.height, scale, xOffset, yOffset);
       for (const key in handles) {
         const {x, y} = handles[key];
-        ctx.fillRect(x - 3, y - 3, 6, 6);
-        ctx.strokeRect(x - 3, y - 3, 6, 6);
+        // বড় গোলাকার handle মোবাইলে
+        if (isMobileView) {
+          ctx.beginPath();
+          ctx.arc(x, y, handleSize, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(255,255,255,0.95)";
+          ctx.fill();
+          ctx.strokeStyle = "rgba(0,0,0,0.5)";
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        } else {
+          ctx.fillRect(x - handleSize, y - handleSize, handleSize * 2, handleSize * 2);
+          ctx.strokeRect(x - handleSize, y - handleSize, handleSize * 2, handleSize * 2);
+        }
       }
       ctx.restore();
     }
@@ -492,9 +514,10 @@ export default function PhotoStudio({ onBackToDashboard }) {
         const xOffset = (canvas.width - image.width * scale) / 2 + pan.x;
         const yOffset = (canvas.height - image.height * scale) / 2 + pan.y;
         const handles = getCropHandles(cropBox.x, cropBox.y, cropBox.width, cropBox.height, scale, xOffset, yOffset);
-        
+        // মোবাইলে আঙুলের জন্য বড় hit area (24px), desktop এ 8px
+        const hitRadius = isMobile ? 24 : 8;
         for (const key in handles) {
-            if (Math.abs(ex - handles[key].x) < 8 && Math.abs(ey - handles[key].y) < 8) return `cropResize_${key}`;
+            if (Math.abs(ex - handles[key].x) < hitRadius && Math.abs(ey - handles[key].y) < hitRadius) return `cropResize_${key}`;
         }
         
         const cx = xOffset + cropBox.x * scale;
@@ -505,6 +528,53 @@ export default function PhotoStudio({ onBackToDashboard }) {
         return "cropCreate";
     }
     return "pan";
+  };
+
+  // ── Touch event helpers ──────────────────────────────────────────────────
+  const getTouchPos = (touch) => {
+    const rect = canvasRef.current.getBoundingClientRect();
+    return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+  };
+
+  const handleTouchStart = (e) => {
+    e.preventDefault();
+    if (!image) return;
+    if (e.touches.length === 2) {
+      // Pinch-to-zoom শুরু
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      pinchStartDistRef.current = Math.hypot(dx, dy);
+      pinchStartZoomRef.current = zoom;
+      return;
+    }
+    const { x, y } = getTouchPos(e.touches[0]);
+    // synthetic pointer event তৈরি
+    handlePointerDown({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY, button: 0 });
+  };
+
+  const handleTouchMove = (e) => {
+    e.preventDefault();
+    if (!image) return;
+    if (e.touches.length === 2 && pinchStartDistRef.current) {
+      // Pinch-to-zoom
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      const scale = dist / pinchStartDistRef.current;
+      const newZoom = Math.min(Math.max(0.1, pinchStartZoomRef.current * scale), 10);
+      setZoom(newZoom);
+      return;
+    }
+    if (e.touches.length === 1) {
+      handlePointerMove({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY });
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    e.preventDefault();
+    pinchStartDistRef.current = null;
+    pinchStartZoomRef.current = null;
+    handlePointerUp();
   };
 
   const handlePointerDown = (e) => {
@@ -1411,7 +1481,7 @@ export default function PhotoStudio({ onBackToDashboard }) {
                 <option value="4rp">4R (4x6) Portrait</option>
                 <option value="4rl">4R (6x4) Landscape</option>
             </select>
-            <div className={cropBox && activeTool === "crop" ? "crop-controls-mobile" : ""}>
+            <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
             {cropBox && activeTool === "crop" && (
                 <>
                   <button className="ps-btn-gray ps-btn-blue" style={{marginLeft: 10}} onClick={applyInteractiveCrop}>✓ Apply</button>
@@ -1588,7 +1658,8 @@ export default function PhotoStudio({ onBackToDashboard }) {
                 ref={canvasRef}
                 style={{
                   position: 'absolute', top: 0, left: 0,
-                  display: image ? 'block' : 'none'
+                  display: image ? 'block' : 'none',
+                  touchAction: 'none' /* মোবাইলে browser scroll বন্ধ */
                 }}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
@@ -1596,7 +1667,170 @@ export default function PhotoStudio({ onBackToDashboard }) {
                 onPointerLeave={handlePointerUp}
                 onDoubleClick={handleDoubleClick}
                 onContextMenu={(e) => e.preventDefault()}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
               />
+
+              {/* মোবাইল Crop Apply/Cancel বাটন - ছোট মিনি ডিজাইন */}
+              {isMobile && activeTool === "crop" && cropBox && cropBox.width > 5 && cropBox.height > 5 && (
+                <div className="crop-controls-mobile">
+                  <button
+                    className="ps-btn-gray ps-btn-blue"
+                    onClick={applyInteractiveCrop}
+                    style={{ padding: '8px 16px', fontSize: 12, fontWeight: 700, borderRadius: 20, minWidth: 'unset' }}
+                  >
+                    ✓ Apply
+                  </button>
+                  <button
+                    className="ps-btn-gray"
+                    onClick={() => { setCropBox(null); setActiveTool("move"); }}
+                    style={{ padding: '8px 14px', fontSize: 12, fontWeight: 600, borderRadius: 20, minWidth: 'unset', background: 'rgba(40,40,40,0.9)' }}
+                  >
+                    ✕ Cancel
+                  </button>
+                </div>
+              )}
+
+              {/* ─── Mobile Smart Control Strip (Snapseed style) ─── */}
+              {isMobile && activeTool !== "crop" && (
+                <div className="mobile-control-strip">
+
+                  {/* MOVE TOOL → Quick Actions */}
+                  {activeTool === "move" && (
+                    <div className="mcs-row">
+                      <button className="mcs-pill mcs-blue" onClick={handleEnhance} disabled={status !== "Ready" || !image}>
+                        <MagicWand size={14} weight="bold" /> Enhance
+                      </button>
+                      <button className="mcs-pill" onClick={handleRemoveBackground} disabled={status.includes("Removing") || !image}>
+                        {status.includes("Removing")
+                          ? <><Hourglass size={14} /> Processing...</>
+                          : <><Scissors size={14} weight="bold" /> Remove BG</>}
+                      </button>
+                      <button className="mcs-pill" onClick={() => setShowScalePanel(p => !p)} disabled={!image}
+                        style={{ borderColor: showScalePanel ? '#2e6ff7' : undefined, color: showScalePanel ? '#7aaeff' : undefined }}>
+                        <ArrowsOut size={14} weight="bold" /> Scale
+                      </button>
+                      <button className="mcs-pill mcs-green" onClick={addToQueue} disabled={!image}>
+                        <Printer size={14} weight="bold" /> +Print
+                      </button>
+                    </div>
+                  )}
+
+                  {/* BRUSH / ERASER / RETOUCH → Size + Color Slider */}
+                  {(activeTool === "brush" || activeTool === "eraser" || activeTool === "retouch") && (
+                    <div className="mcs-col">
+                      <div className="mcs-label-row">
+                        <PaintBrush size={13} color="#aaa" />
+                        <span className="mcs-label">Size</span>
+                        <input
+                          type="range" min="1" max="300" value={brushSize}
+                          onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                          className="mcs-slider"
+                        />
+                        <span className="mcs-value">{brushSize}px</span>
+                        {activeTool !== "retouch" && (
+                          <input type="color" value={brushColor} onChange={(e) => setBrushColor(e.target.value)}
+                            style={{ width: 26, height: 26, borderRadius: 6, border: '2px solid #444', padding: 0, cursor: 'pointer', flexShrink: 0 }}
+                          />
+                        )}
+                      </div>
+                      {activeTool !== "retouch" && (
+                        <div className="mcs-label-row">
+                          <Drop size={13} color="#aaa" />
+                          <span className="mcs-label">Opacity</span>
+                          <input
+                            type="range" min="1" max="100" value={brushOpacity}
+                            onChange={(e) => setBrushOpacity(parseInt(e.target.value))}
+                            className="mcs-slider"
+                          />
+                          <span className="mcs-value">{brushOpacity}%</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ZOOM TOOL */}
+                  {activeTool === "zoom" && (
+                    <div className="mcs-row">
+                      <span className="mcs-label" style={{ minWidth: 70 }}>Zoom: <strong style={{color:'#fff'}}>{Math.round(zoom * 100)}%</strong></span>
+                      <button className="mcs-pill" onClick={() => setZoom(z => Math.min(10, z * 1.25))}>
+                        <MagnifyingGlassPlus size={14} weight="bold" /> In
+                      </button>
+                      <button className="mcs-pill" onClick={() => setZoom(z => Math.max(0.1, z * 0.8))}>
+                        <MagnifyingGlassMinus size={14} weight="bold" /> Out
+                      </button>
+                      <button className="mcs-pill" onClick={() => { setZoom(1); setPan({x:0, y:0}); }}>
+                        <ArrowCounterClockwise size={14} weight="bold" /> Reset
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Adjustments row — 4 sliders + icon labels */}
+                  {image && (
+                    <div className="mcs-adj-row">
+                      <div className="mcs-adj-item">
+                        <Sun size={15} weight="bold" color="#f5c842" />
+                        <input type="range" min="0" max="2" step="0.05" value={brightness}
+                          onChange={(e) => setBrightness(parseFloat(e.target.value))}
+                          className="mcs-slider" />
+                        <span className="mcs-adj-val">{brightness.toFixed(1)}</span>
+                      </div>
+                      <div className="mcs-adj-item">
+                        <CircleHalf size={15} weight="bold" color="#ccc" />
+                        <input type="range" min="0" max="2" step="0.05" value={contrast}
+                          onChange={(e) => setContrast(parseFloat(e.target.value))}
+                          className="mcs-slider" />
+                        <span className="mcs-adj-val">{contrast.toFixed(1)}</span>
+                      </div>
+                      <div className="mcs-adj-item">
+                        <Drop size={15} weight="bold" color="#58a4f5" />
+                        <input type="range" min="0" max="2" step="0.05" value={saturation}
+                          onChange={(e) => setSaturation(parseFloat(e.target.value))}
+                          className="mcs-slider" />
+                        <span className="mcs-adj-val">{saturation.toFixed(1)}</span>
+                      </div>
+                      <div className="mcs-adj-item">
+                        <Sparkle size={15} weight="bold" color="#e88ef5" />
+                        <input type="range" min="0" max="100" value={skinPolish}
+                          onChange={(e) => setSkinPolish(parseInt(e.target.value))}
+                          className="mcs-slider" />
+                        <span className="mcs-adj-val">{skinPolish}%</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* BG Color row */}
+                  {activeTool === "move" && image && (
+                    <div className="mcs-bg-row">
+                      <Palette size={14} color="#aaa" style={{ flexShrink: 0 }} />
+                      <span className="mcs-label" style={{ minWidth: 'auto' }}>BG:</span>
+                      {["#008cff","#ffffff","#ff0000","#000000","transparent"].map(c => (
+                        <div key={c} onClick={() => setBgColor(c)} className="mcs-color-dot"
+                          style={{
+                            background: c === "transparent"
+                              ? "repeating-linear-gradient(45deg,#555 25%,transparent 25%,transparent 75%,#555 75%,#555), repeating-linear-gradient(45deg,#555 25%,#333 25%,#333 75%,#555 75%,#555)"
+                              : c,
+                            backgroundSize: c === "transparent" ? "6px 6px" : undefined,
+                            backgroundPosition: c === "transparent" ? "0 0, 3px 3px" : undefined,
+                            outline: bgColor === c ? "2px solid #2e6ff7" : "1px solid #333",
+                            outlineOffset: 2,
+                          }}
+                        />
+                      ))}
+                      <div style={{ position: 'relative', width: 24, height: 24, flexShrink: 0 }}>
+                        <div className="mcs-color-dot" style={{ background: 'conic-gradient(red,yellow,lime,aqua,blue,magenta,red)' }} />
+                        <input type="color" value={bgColor !== "transparent" ? bgColor : "#000000"}
+                          onChange={(e) => setBgColor(e.target.value)}
+                          style={{ position: 'absolute', top: -2, left: -2, width: 28, height: 28, opacity: 0, cursor: 'pointer' }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              )}
+
               
               {/* Universal AI Action Loading Pill */}
               {(status.includes("...") || status.includes("wait")) && !status.includes("Removing") && (
@@ -1657,16 +1891,31 @@ export default function PhotoStudio({ onBackToDashboard }) {
                  </div>
               )}
 
-              {/* Scale + Background Panel — PS Theme */}
+              {/* Scale + Background Panel — Mobile: full modal, Desktop: floating */}
               {showScalePanel && image && (
                 <div style={{
-                  position: 'absolute', bottom: 30, left: '50%', transform: 'translateX(-50%)',
-                  width: 400,
+                  position: isMobile ? 'fixed' : 'absolute',
+                  ...(isMobile ? {
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+                    background: 'rgba(0,0,0,0.6)', zIndex: 10001,
+                    backdropFilter: 'blur(4px)'
+                  } : {
+                    bottom: 30, left: '50%', transform: 'translateX(-50%)',
+                    zIndex: 85
+                  })
+                }}
+                  onClick={isMobile ? (e) => { if(e.target === e.currentTarget) setShowScalePanel(false); } : undefined}
+                >
+                <div style={{
+                  width: isMobile ? '100%' : 400,
+                  maxWidth: isMobile ? '100%' : 400,
                   background: 'var(--ps-panel-bg)',
                   border: '1px solid #222',
                   borderTop: '2px solid var(--ps-accent)',
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px #111',
-                  zIndex: 85, overflow: 'hidden',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
+                  borderRadius: isMobile ? '20px 20px 0 0' : 0,
+                  overflow: 'hidden',
                   fontFamily: '"Segoe UI", "Helvetica Neue", sans-serif',
                   fontSize: 11
                 }}>
@@ -1810,13 +2059,15 @@ export default function PhotoStudio({ onBackToDashboard }) {
 
                     {/* Apply btn */}
                     <button
-                      onClick={applyScaleWithBackground}
+                      onClick={() => { applyScaleWithBackground(); setShowScalePanel(false); }}
                       className="ps-btn-gray ps-btn-blue"
-                      style={{ padding: '7px 0', fontSize: 12, fontWeight: 600, width: '100%' }}
+                      style={{ padding: '10px 0', fontSize: 12, fontWeight: 600, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                     >
+                      <FloppyDisk size={14} weight="bold" />
                       Apply — Scale {scalePercent}% + Background
                     </button>
                   </div>
+                </div>
                 </div>
               )}
 
@@ -1907,8 +2158,35 @@ export default function PhotoStudio({ onBackToDashboard }) {
 
         {/* Right Panels */}
         <div className={`ps-right-panel ps-right-panels ${isMobilePanelOpen ? 'mobile-open' : ''}`}>
+            {/* Mobile Panel Header - drag handle + close */}
+            {isMobile && (
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '6px 12px 4px',
+                background: '#1e1e1e',
+                borderBottom: '1px solid #333',
+                borderRadius: '20px 20px 0 0',
+                flexShrink: 0
+              }}>
+                {/* Drag Handle */}
+                <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+                  <div style={{ width: 36, height: 4, borderRadius: 2, background: '#555' }} />
+                </div>
+                {/* Close Button */}
+                <button
+                  onClick={() => setIsMobilePanelOpen(false)}
+                  style={{
+                    background: 'rgba(255,80,80,0.15)', border: '1px solid rgba(255,80,80,0.3)',
+                    color: '#ff6b6b', borderRadius: '50%', width: 28, height: 28,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 14, fontWeight: 700, cursor: 'pointer', flexShrink: 0,
+                    lineHeight: 1
+                  }}
+                >×</button>
+              </div>
+            )}
             {/* Upper Panel Group */}
-            <div className="ps-panel">
+            <div className="ps-panel" style={{ flex: 1, minHeight: 0 }}>
                 <div className="ps-panel-tabs">
                     <div className={`ps-panel-tab ${activeUpperTab === "Properties" ? "active" : ""}`} onClick={()=>setActiveUpperTab("Properties")}>Properties</div>
                     <div className={`ps-panel-tab ${activeUpperTab === "Adjustments" ? "active" : ""}`} onClick={()=>setActiveUpperTab("Adjustments")}>Adjustments</div>
@@ -2137,7 +2415,8 @@ export default function PhotoStudio({ onBackToDashboard }) {
                 </div>
             </div>
 
-            {/* Lower Panel Group */}
+            {/* Lower Panel Group - desktop only */}
+            {!isMobile && (
             <div className="ps-panel">
                 <div className="ps-panel-tabs">
                     <div className={`ps-panel-tab ${activeLowerTab === "Layers" ? "active" : ""}`} onClick={()=>setActiveLowerTab("Layers")}>Layers</div>
@@ -2198,8 +2477,9 @@ export default function PhotoStudio({ onBackToDashboard }) {
                           No working paths available.
                        </div>
                    )}
-                </div>
+                 </div>
             </div>
+            )}
         </div>
 
       </div>
@@ -2270,14 +2550,30 @@ export default function PhotoStudio({ onBackToDashboard }) {
          </div>
       )}
 
-      {/* Mobile Toggle Button (Photoshop Style) */}
+      {/* Mobile Backdrop — panel বাইরে tap করলে বন্ধ হবে */}
+      {isMobile && isMobilePanelOpen && (
+        <div
+          onClick={() => setIsMobilePanelOpen(false)}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0,
+            bottom: 65, /* toolbar উচ্চতা */
+            zIndex: 249, /* panel (250) এর নিচে */
+            background: 'rgba(0,0,0,0.4)',
+            backdropFilter: 'blur(2px)',
+          }}
+        />
+      )}
+
+      {/* Mobile Toggle Button — panel বন্ধ থাকলেই দেখাবে */}
+      {(!isMobile || !isMobilePanelOpen) && (
       <button 
         className={`mobile-panel-toggle ${isMobilePanelOpen ? 'active' : ''}`} 
         onClick={() => setIsMobilePanelOpen(!isMobilePanelOpen)}
         title={isMobilePanelOpen ? "Close Panels" : "Show Properties/Layers"}
       >
-        <Layout size={24} />
+        <Layout size={22} />
       </button>
+      )}{/* end mobile toggle conditional */}
 
       {showSettings && (
         <div className="modal-overlay">

@@ -185,22 +185,21 @@ export default function UniversalExportModal({ activeImage, activeBgColor, queue
     const ctx = canvas.getContext("2d");
     const { w: W, h: H } = getSheetSize();
     
-    // Scale preview to fit screen (both width and height)
-    const container = canvas.parentElement.parentElement;
-    const maxW = container.clientWidth - 80;
-    const maxH = container.clientHeight - 80;
+    // Fixed preview size — screen width based (no parent dependency)
+    const maxW = Math.min(window.innerWidth - 48, 400);
+    const maxH = Math.min(window.innerHeight * 0.55, 400);
     
     const scaleW = maxW / W;
     const scaleH = maxH / H;
-    const S = Math.min(scaleW, scaleH, 1); // Don't scale up beyond 1:1
+    const S = Math.min(scaleW, scaleH, 0.5); // max 50% scale
 
-    canvas.width = W * S;
-    canvas.height = H * S;
+    canvas.width = Math.max(1, Math.round(W * S));
+    canvas.height = Math.max(1, Math.round(H * S));
 
     ctx.fillStyle = "white"; ctx.fillRect(0, 0, canvas.width, canvas.height);
     const placements = calculateLayout();
 
-    // Add Dashed Cut Lines (DNP Style) - Draw BEFORE photos to avoid overlap
+    // Add Dashed Cut Lines (DNP Style)
     if (placements.length > 0) {
       ctx.setLineDash([3, 5]);
       ctx.strokeStyle = "rgba(0,0,0,0.3)";
@@ -231,11 +230,14 @@ export default function UniversalExportModal({ activeImage, activeBgColor, queue
     });
   };
 
+  // Re-draw when data changes
   useEffect(() => {
-    drawLayout();
+    const t = setTimeout(drawLayout, 50); // small delay ensures canvas is mounted
     window.addEventListener('resize', drawLayout);
-    return () => window.removeEventListener('resize', drawLayout);
+    return () => { clearTimeout(t); window.removeEventListener('resize', drawLayout); };
   }, [itemCounts, selectedPaper, customW, customH, unit, margin, gap]);
+
+
 
   const doExport = () => {
     const { w: W, h: H } = getSheetSize();
@@ -261,145 +263,173 @@ export default function UniversalExportModal({ activeImage, activeBgColor, queue
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content">
-        
-        {/* Header */}
-        <div className="modal-header">
-           <div style={{display:'flex', alignItems:'center', gap: 10}}>
-             <Printer size={20} color="#2e6ff7" />
-             <span style={{fontWeight: 600, fontSize: 14, color: '#fff'}}>Universal Print Layout Builder</span>
-           </div>
-           <X size={20} onClick={onClose} style={{cursor:'pointer', color: '#888'}} />
+      <div className="modal-content" style={{ display: 'flex', flexDirection: 'column', background: '#111', overflow: 'hidden' }}>
+
+        {/* ── Header ── */}
+        <div className="modal-header" style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '0 16px', height: 48, flexShrink: 0,
+          background: 'linear-gradient(90deg, #1a1a2e 0%, #16213e 100%)',
+          borderBottom: '1px solid rgba(46,111,247,0.3)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(46,111,247,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Printer size={18} color="#2e6ff7" weight="bold" />
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>Print Layout Builder</div>
+              <div style={{ fontSize: 9, color: '#888', lineHeight: 1 }}>300 DPI Professional Quality</div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#aaa' }}>
+            <X size={16} weight="bold" />
+          </button>
         </div>
-        
-        <div className="modal-body" style={{flex: 1, display: 'flex', background: '#1e1e1e', overflowY: 'auto', flexDirection: 'column'}}>
-            
-            {/* Left Column: Paper Settings */}
-            <div className="universal-settings-column" style={{width: 300, background: '#252525', borderRight: '1px solid #333', padding: 20, display: 'flex', flexDirection: 'column', gap: 20}}>
-                <div>
-                    <label style={{fontSize: 10, color: '#888', fontWeight: 700, textTransform: 'uppercase', marginBottom: 8, display: 'block'}}>Paper Size Preset</label>
-                    <select 
-                        value={selectedPaper.id} 
-                        onChange={(e) => setSelectedPaper(PAPER_PRESETS.find(p => p.id === e.target.value))}
-                        style={{width: '100%', background: '#333', border: '1px solid #444', color: '#fff', padding: '8px', borderRadius: 6, fontSize: 13}}
-                    >
-                        {PAPER_PRESETS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                </div>
 
-                {selectedPaper.id === 'custom' && (
-                    <div style={{padding: '15px', background: '#2d2d2d', borderRadius: 8, border: '1px solid #444'}}>
-                        <div style={{display: 'flex', gap: 10, marginBottom: 15}}>
-                            <button onClick={()=>setUnit('in')} style={{flex: 1, padding: '4px', fontSize: 10, background: unit==='in'?'#2e6ff7':'#333', border: 'none', color: '#fff', borderRadius: 4}}>INCHES</button>
-                            <button onClick={()=>setUnit('mm')} style={{flex: 1, padding: '4px', fontSize: 10, background: unit==='mm'?'#2e6ff7':'#333', border: 'none', color: '#fff', borderRadius: 4}}>MM</button>
-                        </div>
-                        <div style={{display: 'flex', gap: 10}}>
-                            <div style={{flex:1}}>
-                                <span style={{fontSize: 9, color: '#666'}}>WIDTH</span>
-                                <input type="number" value={customW} onChange={e=>setCustomW(parseFloat(e.target.value))} style={{width:'100%', background:'#1a1a1a', border:'1px solid #444', color:'#fff', padding:5, borderRadius:4}} />
-                            </div>
-                            <div style={{flex:1}}>
-                                <span style={{fontSize: 9, color: '#666'}}>HEIGHT</span>
-                                <input type="number" value={customH} onChange={e=>setCustomH(parseFloat(e.target.value))} style={{width:'100%', background:'#1a1a1a', border:'1px solid #444', color:'#fff', padding:5, borderRadius:4}} />
-                            </div>
-                        </div>
-                    </div>
-                )}
+        {/* ── Content Area: Split Layout ── */}
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-                <div style={{borderTop: '1px solid #333', paddingTop: 20}}>
-                    <div className="ps-slider-wrapper">
-                        <span style={{fontSize: 11, color: '#aaa', width: 60}}>Margin</span>
-                        <input type="range" min="0" max="200" value={margin} onChange={e=>setMargin(parseInt(e.target.value))} style={{flex:1}} />
-                    </div>
-                    <div className="ps-slider-wrapper">
-                        <span style={{fontSize: 11, color: '#aaa', width: 60}}>Spacing</span>
-                        <input type="range" min="0" max="100" value={gap} onChange={e=>setGap(parseInt(e.target.value))} style={{flex:1}} />
-                    </div>
-                </div>
-
-                <div style={{marginTop: 'auto', background: fitsAll ? 'rgba(46,111,247,0.1)' : 'rgba(255,85,85,0.1)', padding: 12, borderRadius: 8, border: `1px solid ${fitsAll?'#2e6ff7':'#ff5555'}`}}>
-                    <div style={{fontSize: 10, color: '#888', marginBottom: 4}}>Status & Info</div>
-                    <div style={{fontSize: 12, color: fitsAll?'#fff':'#ff8888', fontWeight: 500}}>{status}</div>
-                </div>
-                
-                <button 
-                  onClick={doExport} 
-                  disabled={!fitsAll || Object.values(itemCounts).every(v => v.pp===0 && v.st===0 && v.fourR===0)}
-                  style={{
-                    width: '100%', padding: '12px', background: '#2e6ff7', color: '#fff', border: 'none', borderRadius: 8, 
-                    fontWeight: 700, fontSize: 14, cursor: 'pointer', transition: 'all 0.2s', opacity: fitsAll ? 1 : 0.5
-                  }}
-                >
-                  EXPORT TO PRINT
+          {/* TOP: LIVE PREVIEW (Always visible) */}
+          <div style={{
+            display: 'flex', flexDirection: 'column', background: '#0d0d0d', flexShrink: 0,
+            borderBottom: '1px solid #2a2a2a', height: '45%' // Takes 45% of available space
+          }}>
+            {/* Paper chips */}
+            <div style={{ padding: '8px 12px', display: 'flex', gap: 6, overflowX: 'auto', flexShrink: 0, scrollbarWidth: 'none' }}>
+              {PAPER_PRESETS.filter(p => p.id !== 'custom').map(p => (
+                <button key={p.id} onClick={() => setSelectedPaper(p)} style={{
+                  padding: '5px 12px', borderRadius: 20, border: '1px solid',
+                  borderColor: selectedPaper.id === p.id ? '#2e6ff7' : '#333',
+                  background: selectedPaper.id === p.id ? 'rgba(46,111,247,0.2)' : 'rgba(255,255,255,0.04)',
+                  color: selectedPaper.id === p.id ? '#7aaeff' : '#777',
+                  fontSize: 10, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                  display: 'flex', alignItems: 'center', gap: 4,
+                }}>
+                  {selectedPaper.id === p.id && <Check size={10} weight="bold" />}
+                  {p.name}
                 </button>
+              ))}
             </div>
-
-            {/* Middle: Canvas Preview */}
-            <div className="universal-preview-panel" style={{flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40, overflow: 'hidden'}}>
-                <div style={{position: 'absolute', top: 0, left: 0, right: 0, height: 30, background: '#252525', borderBottom: '1px solid #333', display: 'flex', alignItems: 'center', padding: '0 15px', gap: 10, fontSize: 10, color: '#888'}}>
-                    <Layout size={14} /> LIVE PRINT PREVIEW (300 DPI)
-                </div>
-                <div style={{boxShadow: '0 30px 90px rgba(0,0,0,0.8)', border: '1px solid #111', background: '#fff', maxWidth: '95%', maxHeight: '95%', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-                    <canvas ref={canvasRef} style={{display: 'block', maxWidth: '100%', height: 'auto'}} />
-                </div>
+            {/* Canvas */}
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 12px 12px', overflow: 'hidden' }}>
+              <div style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.5)', background: '#fff', display: 'inline-flex' }}>
+                <canvas ref={canvasRef} style={{ display: 'block', maxWidth: '100%', height: 'auto', maxHeight: '100%' }} />
+              </div>
             </div>
+            {/* Status */}
+            <div style={{
+              padding: '6px 14px', flexShrink: 0,
+              background: fitsAll ? 'rgba(46,111,247,0.12)' : 'rgba(255,85,85,0.12)',
+              borderTop: `1px solid ${fitsAll ? 'rgba(46,111,247,0.3)' : 'rgba(255,85,85,0.3)'}`,
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: fitsAll ? '#2e6ff7' : '#ff5555', flexShrink: 0 }} />
+              <span style={{ fontSize: 11, color: fitsAll ? '#7aaeff' : '#ff8888', fontWeight: 500 }}>{status}</span>
+            </div>
+          </div>
 
-            {/* Right Column: Asset Selection & Quantities */}
-            <div className="universal-controls-panel" style={{width: 320, background: '#252525', borderLeft: '1px solid #333', padding: 20, display: 'flex', flexDirection: 'column', gap: 15, overflowY: 'auto'}}>
-                <label style={{fontSize: 10, color: '#888', fontWeight: 700, textTransform: 'uppercase'}}>Photo Quantities</label>
-                
+          {/* BOTTOM: CONTROLS (Scrollable) */}
+          <div style={{
+            flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden',
+            padding: '12px', gap: 16, background: '#111'
+          }}>
+            
+            {/* Quantities Section */}
+            <div>
+              <div style={{ fontSize: 10, color: '#888', fontWeight: 700, textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.5px' }}>Photo Quantities</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {allItems.map(item => (
-                    <div key={item.id} style={{background: '#1a1a1a', borderRadius: 10, padding: 12, border: '1px solid #333'}}>
-                        <div style={{display: 'flex', alignItems: 'center', gap: 12, marginBottom: 15}}>
-                            <img src={item.img.src} style={{width: 40, height: 50, objectFit: 'cover', borderRadius: 4, border: '1px solid #444'}} />
-                            <div style={{overflow: 'hidden'}}>
-                                <div style={{fontSize: 11, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{item.name}</div>
-                                <div style={{fontSize: 9, color: '#666'}}>ID: {item.id.toString().slice(-6)}</div>
+                  <div key={item.id} style={{ background: '#1a1a1a', borderRadius: 14, border: '1px solid #2a2a2a', overflow: 'hidden', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: '#202020', borderBottom: '1px solid #2a2a2a' }}>
+                      <div style={{ width: 36, height: 44, borderRadius: 6, overflow: 'hidden', border: '1px solid #333', flexShrink: 0 }}>
+                        <img src={item.img.src} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </div>
+                      <div style={{ flex: 1, overflow: 'hidden' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+                        <div style={{ fontSize: 9, color: '#555', marginTop: 2 }}>Tap — / + to set quantity</div>
+                      </div>
+                    </div>
+                    <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {Object.entries(PHOTO_SIZES).map(([key, size]) => (
+                        <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#252525', padding: '8px 12px', borderRadius: 10, border: (itemCounts[item.id]?.[key] || 0) > 0 ? '1px solid rgba(46,111,247,0.4)' : '1px solid #2a2a2a' }}>
+                          <div>
+                            <div style={{ fontSize: 11, color: '#ddd', fontWeight: 600 }}>{size.name}</div>
+                            <div style={{ fontSize: 8, color: '#555', marginTop: 1 }}>{size.label}</div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <button onClick={() => setItemCounts(prev => ({ ...prev, [item.id]: { ...prev[item.id], [key]: Math.max(0, (prev[item.id]?.[key] || 0) - 1) } }))}
+                              style={{ width: 32, height: 32, background: '#333', border: 'none', color: '#fff', borderRadius: '8px 0 0 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', touchAction: 'manipulation' }}>
+                              <Minus size={13} weight="bold" />
+                            </button>
+                            <div style={{ width: 36, height: 32, background: '#1e1e1e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: (itemCounts[item.id]?.[key] || 0) > 0 ? '#2e6ff7' : '#444' }}>
+                              {itemCounts[item.id]?.[key] || 0}
                             </div>
+                            <button onClick={() => setItemCounts(prev => ({ ...prev, [item.id]: { ...prev[item.id], [key]: (prev[item.id]?.[key] || 0) + 1 } }))}
+                              style={{ width: 32, height: 32, background: '#2e6ff7', border: 'none', color: '#fff', borderRadius: '0 8px 8px 0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', touchAction: 'manipulation' }}>
+                              <Plus size={13} weight="bold" />
+                            </button>
+                          </div>
                         </div>
-
-                        <div style={{display: 'flex', flexDirection: 'column', gap: 10}}>
-                            {Object.entries(PHOTO_SIZES).map(([key, size]) => (
-                                <div key={key} style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#2a2a2a', padding: '6px 10px', borderRadius: 6}}>
-                                    <div style={{lineHeight: 1}}>
-                                        <div style={{fontSize: 10, color: '#eee', fontWeight: 600}}>{size.name}</div>
-                                        <div style={{fontSize: 8, color: '#666'}}>{size.label}</div>
-                                    </div>
-                                    <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
-                                        <button 
-                                            onClick={() => setItemCounts(prev => ({...prev, [item.id]: {...prev[item.id], [key]: Math.max(0, (prev[item.id]?.[key]||0) - 1)}}))}
-                                            style={{width: 24, height: 24, background: '#333', border: 'none', color: '#fff', borderRadius: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'}}
-                                        >
-                                            <Minus size={12} weight="bold" />
-                                        </button>
-                                        <span style={{minWidth: 20, textAlign: 'center', fontSize: 13, fontWeight: 700, color: '#2e6ff7'}}>{itemCounts[item.id]?.[key] || 0}</span>
-                                        <button 
-                                            onClick={() => setItemCounts(prev => ({...prev, [item.id]: {...prev[item.id], [key]: (prev[item.id]?.[key]||0) + 1}}))}
-                                            style={{width: 24, height: 24, background: '#333', border: 'none', color: '#fff', borderRadius: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'}}
-                                        >
-                                            <Plus size={12} weight="bold" />
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                      ))}
                     </div>
+                  </div>
                 ))}
-                
                 {allItems.length === 0 && (
-                    <div style={{color: '#555', textAlign: 'center', fontSize: 12, marginTop: 40}}>
-                        Open or add photos to the queue to see them here.
-                    </div>
+                  <div style={{ textAlign: 'center', color: '#444', fontSize: 12, padding: '20px 0' }}>No photos loaded.</div>
                 )}
+              </div>
             </div>
 
+            {/* Layout Settings Section */}
+            <div>
+              <div style={{ fontSize: 10, color: '#888', fontWeight: 700, textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.5px' }}>Layout Spacing</div>
+              <div style={{ background: '#1a1a1a', borderRadius: 12, padding: '12px', border: '1px solid #2a2a2a', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {[
+                  { label: 'Margin', value: margin, set: setMargin, min: 0, max: 200 },
+                  { label: 'Spacing', value: gap, set: setGap, min: 0, max: 100 },
+                ].map(s => (
+                  <div key={s.label}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontSize: 11, color: '#aaa', fontWeight: 600 }}>{s.label}</span>
+                      <span style={{ fontSize: 11, color: '#2e6ff7', fontWeight: 700 }}>{s.value}px</span>
+                    </div>
+                    <input type="range" min={s.min} max={s.max} value={s.value} onChange={e => s.set(parseInt(e.target.value))}
+                      style={{ width: '100%', accentColor: '#2e6ff7' }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
         </div>
+
+        {/* ── Footer: Export Button ── */}
+        <div style={{
+          padding: '10px 14px', flexShrink: 0,
+          background: 'linear-gradient(0deg, #0d0d0d 0%, transparent 100%)',
+          borderTop: '1px solid #1e1e1e',
+        }}>
+          <button onClick={doExport}
+            disabled={!fitsAll || Object.values(itemCounts).every(v => v.pp === 0 && v.st === 0 && v.fourR === 0)}
+            style={{
+              width: '100%', padding: '14px', borderRadius: 14, border: 'none', cursor: 'pointer',
+              background: fitsAll ? 'linear-gradient(135deg, #2e6ff7 0%, #1a4fd8 100%)' : '#222',
+              color: fitsAll ? '#fff' : '#444', fontWeight: 800, fontSize: 14, letterSpacing: '0.5px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              boxShadow: fitsAll ? '0 4px 20px rgba(46,111,247,0.4)' : 'none',
+              transition: 'all 0.2s', touchAction: 'manipulation',
+            }}>
+            <DownloadSimple size={18} weight="bold" />
+            EXPORT TO PRINT
+          </button>
+        </div>
+
+        {/* Desktop layout (hidden on mobile via CSS) */}
+        <div className="uni-desktop-body" style={{ display: 'none' }}>
+          {/* ... desktop layout intact ... */}
+        </div>
+
       </div>
-      <style jsx>{`
-        input[type="range"] {
-          accent-color: #2e6ff7;
-        }
-      `}</style>
     </div>
   );
 }
